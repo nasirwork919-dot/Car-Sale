@@ -6,6 +6,13 @@ import businessRoutes from "./routes/businessRoutes";
 import reviewRoutes from "./routes/reviewRoutes";
 import bookingRoutes from "./routes/bookingRoutes";
 import marketplaceRoutes from "./routes/marketplaceRoutes";
+import auctionRoutes from "./routes/auctionRoutes";
+import transportRoutes from "./routes/transportRoutes";
+import vinRoutes from "./routes/vinRoutes";
+import inspectionRoutes from "./routes/inspectionRoutes";
+import insuranceRoutes from "./routes/insuranceRoutes";
+import transferRoutes from "./routes/transferRoutes";
+import stolenReportRoutes from "./routes/stolenReportRoutes";
 
 const PORT = Number(process.env.BACKEND_PORT) || 3001;
 
@@ -25,6 +32,13 @@ app.use("/api/businesses", businessRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
+app.use("/api/auctions", auctionRoutes);
+app.use("/api/transport", transportRoutes);
+app.use("/api/vin", vinRoutes);
+app.use("/api/inspections", inspectionRoutes);
+app.use("/api/insurance", insuranceRoutes);
+app.use("/api/transfers", transferRoutes);
+app.use("/api/stolen-reports", stolenReportRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

@@ -1,0 +1,67 @@
+Step 2 is complete — vehicles, marketplace, businesses, reviews, bookings all working. Now build Step 3: Auctions, Transport, VIN History, and Inspections.
+
+Build ALL of these endpoints in /server. Do NOT touch anything in src/.
+
+1. AUCTIONS:
+   - POST /api/auctions — Create auction (auth required). Fields: vehicleId (must own the vehicle), startingPrice, reservePrice, duration (H24, H48, D7), depositRequired. Auto-calculate startTime (now) and endTime based on duration. Set status ACTIVE.
+   - GET /api/auctions — Public. List active auctions. Include vehicle details + photos + current highest bid. Support: sortBy (ending_soon, newest, price_asc, price_desc), page, limit.
+   - GET /api/auctions/:id — Public. Single auction with vehicle, all bids (sorted by amount desc), seller info, time remaining.
+   - POST /api/auctions/:id/bid — Place bid (auth required, cannot bid on own auction). Validate: auction must be ACTIVE, not expired, bid must be higher than currentBid (or startingPrice if no bids). Update auction currentBid. Return updated auction.
+   - GET /api/auctions/my-auctions — Auth required. Current user's auctions (as seller).
+   - GET /api/auctions/my-bids — Auth required. Auctions the user has bid on, with their highest bid.
+   - PATCH /api/auctions/:id/cancel — Cancel auction (owner only, only if no bids placed).
+
+2. TRANSPORT:
+   - POST /api/transport — Create transport request (auth required). Fields: vehicleId (optional), originCountry, originCity, destCountry, destCity, transportType (OPEN, ENCLOSED). Status = OPEN.
+   - GET /api/transport — Public. List open transport requests. Filter by: originCountry, destCountry, transportType. Pagination.
+   - GET /api/transport/:id — Public. Single request with all offers.
+   - POST /api/transport/:id/offers — Submit offer as carrier (auth required, cannot offer on own request). Fields: price, estimatedDays, message.
+   - PATCH /api/transport/offers/:offerId/accept — Accept an offer (request owner only). Set offer status ACCEPTED, set all other offers to REJECTED, set request status ACCEPTED.
+   - PATCH /api/transport/:id/status — Update request status (IN_TRANSIT, DELIVERED, CANCELLED). Request owner or accepted carrier only.
+   - GET /api/transport/my-requests — Auth required. User's transport requests.
+   - GET /api/transport/my-offers — Auth required. Carrier's submitted offers.
+
+3. VIN HISTORY:
+   - GET /api/vin/:vin — Public. Look up a VIN. Return: all vehicles in DB matching that VIN (with inspection history, ownership transfers, stolen reports, insurance policies). If no vehicle found, return empty with a message.
+   - GET /api/vin/:vin/inspections — All inspections for that VIN.
+   - GET /api/vin/:vin/ownership — Full ownership chain for that VIN.
+   - GET /api/vin/:vin/stolen — Stolen report status for that VIN.
+   - GET /api/vin/:vin/fraud-score — Calculate a fraud score (0-100) based on: number of ownership transfers, inspection failures, stolen reports, mileage inconsistencies across inspections. Return the score + breakdown.
+
+4. INSPECTIONS:
+   - POST /api/inspections — Create inspection (auth required, role must be GOVERNMENT or inspector). Fields: vehicleId, centerId, result (PASSED, FAILED, REINSPECTION), mileageRecorded, notes, fraudFlags (JSON array), certificateUrl.
+   - GET /api/inspections — List inspections. Filter by: vehicleId, inspectorId, result, centerId. Pagination.
+   - GET /api/inspections/:id — Single inspection with vehicle details and inspector info.
+   - GET /api/inspections/my-inspections — Auth required. Inspector's performed inspections.
+   - PATCH /api/inspections/:id — Update inspection (inspector who created it only). Can update result, notes, fraudFlags.
+
+5. INSURANCE POLICIES:
+   - POST /api/insurance/policies — Create policy (auth required). Fields: vehicleId (optional), insurerId, policyNumber, coverageType, deductible, premium, startDate, endDate, documentUrl. Status = ACTIVE.
+   - GET /api/insurance/policies — Auth required. Current user's policies. Filter by: status, vehicleId.
+   - GET /api/insurance/policies/:id — Auth required. Single policy (must be owner).
+   - PATCH /api/insurance/policies/:id — Update policy (owner only).
+   - PATCH /api/insurance/policies/:id/cancel — Cancel policy (owner only).
+
+6. CLAIMS:
+   - POST /api/insurance/claims — Create claim (auth required). Fields: policyId (must own the policy), vehicleId, incidentDate, incidentType, description, evidenceUrls (JSON array). Status = OPEN.
+   - GET /api/insurance/claims — Auth required. User's claims. Filter by: status, vehicleId.
+   - GET /api/insurance/claims/:id — Auth required. Single claim (must be owner or INSURANCE role).
+   - PATCH /api/insurance/claims/:id/status — Update claim status (INSURANCE role only). Can set: REVIEWING, APPROVED, DENIED, CLOSED.
+
+7. OWNERSHIP TRANSFERS:
+   - POST /api/transfers — Initiate transfer (auth required, must own the vehicle). Fields: vehicleId, toUserId. Status = PENDING.
+   - PATCH /api/transfers/:id/confirm — Confirm transfer (toUser only). Moves vehicle ownership to new user. Status = CONFIRMED.
+   - PATCH /api/transfers/:id/cancel — Cancel transfer (either party, only if PENDING).
+   - GET /api/transfers/my-transfers — Auth required. User's transfers (sent and received).
+
+8. STOLEN REPORTS:
+   - POST /api/stolen-reports — File report (auth required, must own the vehicle). Fields: vehicleId, incidentDate, policeRef (optional), description. Status = OPEN. Auto-flag the vehicle status as FLAGGED.
+   - GET /api/stolen-reports — POLICE or GOVERNMENT role only. List all reports. Filter by: status. Pagination.
+   - GET /api/stolen-reports/:id — Auth required (owner or POLICE/GOVERNMENT).
+   - PATCH /api/stolen-reports/:id/status — POLICE role only. Update status (INVESTIGATING, RECOVERED, CLOSED). If RECOVERED, unflag the vehicle.
+
+Create route files: auctionRoutes.ts, transportRoutes.ts, vinRoutes.ts, inspectionRoutes.ts, insuranceRoutes.ts, transferRoutes.ts, stolenReportRoutes.ts. Register all in the backend entry point.
+
+Seed: 3 inspections, 3 insurance policies, 2 ownership transfers, 1 stolen report.
+
+Test with curl: create auction + place bid, create transport + submit offer + accept, VIN lookup with fraud score, create claim, file stolen report.

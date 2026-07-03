@@ -320,6 +320,10 @@ model Auction {
   seller  User    @relation("SellerAuctions", fields: [sellerId], references: [id])
   bids    Bid[]
 
+  @@index([status])
+  @@index([sellerId])
+  @@index([vehicleId])
+  @@index([endTime])
   @@map("auctions")
 }
 
@@ -333,13 +337,15 @@ model Bid {
   auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
   bidder  User    @relation(fields: [bidderId], references: [id])
 
+  @@index([auctionId])
+  @@index([bidderId])
   @@map("bids")
 }
 
 model TransportRequest {
   id             String                  @id @default(uuid())
   requesterId    String
-  vehicleId      String
+  vehicleId      String?
   originCountry  String
   originCity     String
   destCountry    String
@@ -349,8 +355,14 @@ model TransportRequest {
   createdAt      DateTime                @default(now())
 
   requester User             @relation("RequesterTransport", fields: [requesterId], references: [id])
-  vehicle   Vehicle          @relation(fields: [vehicleId], references: [id])
+  vehicle   Vehicle?         @relation(fields: [vehicleId], references: [id])
   offers    TransportOffer[]
+
+  @@index([requesterId])
+  @@index([status])
+  @@index([originCountry])
+  @@index([destCountry])
+  @@index([transportType])
 
   @@map("transport_requests")
 }
@@ -368,6 +380,8 @@ model TransportOffer {
   request TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   carrier User             @relation("CarrierOffers", fields: [carrierId], references: [id])
 
+  @@index([requestId])
+  @@index([carrierId])
   @@map("transport_offers")
 }
 
@@ -386,6 +400,10 @@ model Inspection {
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
   inspector User    @relation("InspectorInspections", fields: [inspectorId], references: [id])
 
+  @@index([vehicleId])
+  @@index([inspectorId])
+  @@index([centerId])
+  @@index([result])
   @@map("inspections")
 }
 
@@ -408,6 +426,9 @@ model InsurancePolicy {
   vehicle Vehicle?  @relation(fields: [vehicleId], references: [id])
   claims  Claim[]
 
+  @@index([userId])
+  @@index([vehicleId])
+  @@index([status])
   @@map("insurance_policies")
 }
 
@@ -428,6 +449,10 @@ model Claim {
   user    User            @relation(fields: [userId], references: [id])
   vehicle Vehicle         @relation(fields: [vehicleId], references: [id])
 
+  @@index([policyId])
+  @@index([userId])
+  @@index([vehicleId])
+  @@index([status])
   @@map("claims")
 }
 
@@ -445,6 +470,10 @@ model OwnershipTransfer {
   fromUser User    @relation("TransferFrom", fields: [fromUserId], references: [id])
   toUser   User    @relation("TransferTo", fields: [toUserId], references: [id])
 
+  @@index([vehicleId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
   @@map("ownership_transfers")
 }
 
@@ -461,6 +490,9 @@ model StolenReport {
   vehicle  Vehicle @relation(fields: [vehicleId], references: [id])
   reporter User    @relation(fields: [reporterId], references: [id])
 
+  @@index([vehicleId])
+  @@index([reporterId])
+  @@index([status])
   @@map("stolen_reports")
 }
 

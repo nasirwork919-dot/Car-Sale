@@ -278,6 +278,98 @@ async function main() {
   }
   console.log(`Seeded ${reviewCount} reviews`);
 
+  const inspector = users.find((u) => u.role === "GOVERNMENT")!;
+  const inspectionDefs = [
+    { vehicle: vehicles[0], result: "PASSED" as const, mileage: vehicles[0].mileage, notes: "No issues found." },
+    { vehicle: vehicles[1], result: "FAILED" as const, mileage: vehicles[1].mileage, notes: "Brake wear beyond limit." },
+    { vehicle: vehicles[2], result: "REINSPECTION" as const, mileage: vehicles[2].mileage, notes: "Emissions retest required." },
+  ];
+  const inspections = [];
+  for (const def of inspectionDefs) {
+    const inspection = await prisma.inspection.create({
+      data: {
+        vehicleId: def.vehicle.id,
+        inspectorId: inspector.id,
+        result: def.result,
+        mileageRecorded: def.mileage,
+        notes: def.notes,
+        fraudFlags: [],
+      },
+    });
+    inspections.push(inspection);
+  }
+  console.log(`Seeded ${inspections.length} inspections`);
+
+  const insurer = users.find((u) => u.role === "INSURANCE")!;
+  const policyDefs = [
+    { vehicle: vehicles[3], policyNumber: "POL-1001", coverageType: "Comprehensive", deductible: 500, premium: 1200 },
+    { vehicle: vehicles[4], policyNumber: "POL-1002", coverageType: "Liability", deductible: 250, premium: 700 },
+    { vehicle: vehicles[5], policyNumber: "POL-1003", coverageType: "Collision", deductible: 1000, premium: 950 },
+  ];
+  const insurancePolicies = [];
+  for (const def of policyDefs) {
+    const policy = await prisma.insurancePolicy.upsert({
+      where: { policyNumber: def.policyNumber },
+      update: {},
+      create: {
+        userId: def.vehicle.sellerId,
+        vehicleId: def.vehicle.id,
+        insurerId: insurer.id,
+        policyNumber: def.policyNumber,
+        coverageType: def.coverageType,
+        deductible: def.deductible,
+        premium: def.premium,
+        startDate: new Date(),
+        endDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        status: "ACTIVE",
+      },
+    });
+    insurancePolicies.push(policy);
+  }
+  console.log(`Seeded ${insurancePolicies.length} insurance policies`);
+
+  const transferDefs = [
+    { vehicle: vehicles[6], from: seller, to: businessSeller },
+    { vehicle: vehicles[7], from: businessSeller, to: seller },
+  ];
+  let transferCount = 0;
+  for (const def of transferDefs) {
+    const existing = await prisma.ownershipTransfer.findFirst({
+      where: { vehicleId: def.vehicle.id, fromUserId: def.from.id, toUserId: def.to.id },
+    });
+    if (existing) continue;
+    await prisma.ownershipTransfer.create({
+      data: {
+        vehicleId: def.vehicle.id,
+        fromUserId: def.from.id,
+        toUserId: def.to.id,
+        transferDate: new Date(),
+        status: "PENDING",
+      },
+    });
+    transferCount += 1;
+  }
+  console.log(`Seeded ${transferCount} ownership transfers`);
+
+  const stolenVehicle = vehicles[8];
+  const existingReport = await prisma.stolenReport.findFirst({ where: { vehicleId: stolenVehicle.id } });
+  if (!existingReport) {
+    await prisma.stolenReport.create({
+      data: {
+        vehicleId: stolenVehicle.id,
+        reporterId: stolenVehicle.sellerId,
+        incidentDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+        policeRef: "PR-2026-00123",
+        description: "Vehicle stolen overnight from driveway.",
+        status: "OPEN",
+      },
+    });
+    await prisma.vehicle.update({ where: { id: stolenVehicle.id }, data: { status: "FLAGGED" } });
+    console.log("Seeded 1 stolen report");
+  } else {
+    console.log("Stolen report already seeded");
+  }
+
   console.log("Seed complete. Sample login: personal@justcarsale.com / Password123!");
 }
 
