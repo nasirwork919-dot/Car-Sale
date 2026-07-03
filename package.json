@@ -8,7 +8,7 @@
     "dev:frontend": "tsx server.ts",
     "dev:backend": "tsx watch server/index.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && esbuild server/index.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/backend.cjs",
-    "start": "concurrently -n frontend,backend -c blue,magenta \"node dist/server.cjs\" \"node dist/backend.cjs\"",
+    "start": "NODE_ENV=production concurrently -n frontend,backend -c blue,magenta \"node dist/server.cjs\" \"node dist/backend.cjs\"",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
