@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { VEHICLES } from './data';
 import { Vehicle, Role } from './types';
+import { useAuth, backendRoleToFrontend } from './lib/AuthContext';
 
 // Importing sub-modules
 import LandingPage from './components/LandingPage';
@@ -53,6 +54,8 @@ import BlogPage from './components/BlogPage';
 import { motion, AnimatePresence } from 'motion/react';
 import MobileCameraCapture from './components/MobileCameraCapture';
 import FloatingChatAssistant from './components/FloatingChatAssistant';
+import SovereignClientChat from './components/SovereignClientChat';
+import { api } from './lib/api';
 
 export default function App() {
   // Real-time mobile sync camera proxy
@@ -124,6 +127,8 @@ export default function App() {
     }
   };
 
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
   // Authentication persistence across roles
   const [authenticatedRoles, setAuthenticatedRoles] = useState<Record<Role, boolean>>({
     guest: true,
@@ -140,6 +145,22 @@ export default function App() {
   const [headerSearchQuery, setHeaderSearchQuery] = useState('');
   const [headerServicesCategory, setHeaderServicesCategory] = useState<string | null>(null);
   const [headerServicesSearchQuery, setHeaderServicesSearchQuery] = useState('');
+
+  const auth = useAuth();
+
+  // Restore role/session UI state from a persisted backend session (e.g. page reload)
+  useEffect(() => {
+    if (auth.user) {
+      const mappedRole = backendRoleToFrontend(auth.user.role) as Role;
+      setAuthenticatedRoles(prev => ({ ...prev, [mappedRole]: true }));
+      setCurrentRole(prev => (prev === 'guest' ? mappedRole : prev));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.user]);
+
+  const performLogout = () => {
+    auth.logout();
+  };
 
   // Redirect to sign in if accessing a secure dashboard without credentials
   useEffect(() => {
@@ -238,11 +259,20 @@ export default function App() {
     }
   };
 
-  const handleHeaderSearchSubmit = (e: React.FormEvent) => {
+  const handleHeaderSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (headerSearchQuery.trim()) {
-      setSelectedVehicleVin(null);
-      setCurrentPage('marketplace');
+      try {
+        // Wire to GET /api/search?q=
+        const results = await api.get(`/search?q=${encodeURIComponent(headerSearchQuery.trim())}`);
+        console.log('Global search results:', results);
+        
+        // Navigation logic stays same, let Marketplace display results
+        setSelectedVehicleVin(null);
+        setCurrentPage('marketplace');
+      } catch (err) {
+        console.error('Search failed:', err);
+      }
     }
   };
 
@@ -601,13 +631,43 @@ export default function App() {
  
           {/* Right Action Widgets */}
           <div className="flex items-center gap-3">
+            {/* Desktop Search Bar */}
+            <form 
+              onSubmit={handleHeaderSearchSubmit}
+              className="hidden lg:flex items-center relative"
+            >
+              <Search className="absolute left-3 w-3.5 h-3.5 text-zinc-400" />
+              <input 
+                type="text"
+                placeholder="Search..."
+                value={headerSearchQuery}
+                onChange={(e) => setHeaderSearchQuery(e.target.value)}
+                className="bg-black/5 border border-transparent focus:border-black/10 focus:bg-white rounded-lg pl-8 pr-3 py-1.5 text-xs font-semibold outline-none transition-all w-40 focus:w-60"
+              />
+            </form>
             
 
  
+            {/* Desktop Messages Icon */}
+            {auth.isAuthenticated && (
+              <button 
+                onClick={() => { setCurrentPage('messages'); setSelectedVehicleVin(null); }}
+                className="relative p-2 rounded-full hover:bg-black/5 transition-all text-zinc-650 hover:text-zinc-950 cursor-pointer"
+              >
+                <MessageSquare className="w-5 h-5" />
+                {unreadMessages > 0 && (
+                  <span className="absolute top-1 right-1 bg-[#B30000] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                    {unreadMessages}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* General Log-in / Sign-up button actions */}
             {currentRole !== 'guest' && authenticatedRoles[currentRole] ? (
               <button 
                 onClick={() => {
+                  performLogout();
                   setAuthenticatedRoles(prev => ({ ...prev, [currentRole]: false }));
                   setCurrentRole('guest');
                   setCurrentPage('home');
@@ -891,6 +951,7 @@ export default function App() {
                     </div>
                     <button 
                       onClick={() => {
+                        performLogout();
                         setAuthenticatedRoles(prev => ({ ...prev, [currentRole]: false }));
                         setCurrentRole('guest');
                         setCurrentPage('home');
@@ -1054,6 +1115,19 @@ export default function App() {
             </motion.div>
           )}
 
+          {currentPage === 'messages' && (
+            <motion.div
+              key="messages"
+              variants={pageTransitionVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="w-full"
+            >
+              <SovereignClientChat standalone />
+            </motion.div>
+          )}
+
           {currentPage === 'marketplace' && (
             <motion.div
               key="marketplace"
@@ -1064,7 +1138,6 @@ export default function App() {
               className="w-full"
             >
               <Marketplace
-                vehicles={VEHICLES}
                 onSelectVehicle={(vin) => {
                   setSelectedVehicleVin(vin);
                   setVehicleDetailsInitialSubPage('details');

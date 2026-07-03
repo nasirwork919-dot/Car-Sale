@@ -8,10 +8,12 @@ import {
   Gavel, Clock, Sparkles, Shield, User, MapPin, Calendar, MessageSquare, 
   Send, Search, Filter, AlertTriangle, ArrowRight, CheckCircle2, ChevronRight, 
   Truck, HelpCircle, FileText, Lock, Plus, Database, DollarSign, ArrowLeft,
-  X, Compass, Eye, ShieldCheck, History, Landmark, SlidersHorizontal
+  X, Compass, Eye, ShieldCheck, History, Landmark, SlidersHorizontal, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Vehicle } from '../types';
+import { api, ApiError } from '../lib/api';
+import { useAuth } from '../lib/AuthContext';
 
 export interface AuctionListing {
   id: string;
@@ -39,99 +41,89 @@ export interface AuctionListing {
   customsTaxDetails: string;
 }
 
-const INITIAL_AUCTIONS: AuctionListing[] = [
-  {
-    id: 'AUC-992-GT3RS',
-    vin: 'WP0AF299XNS298101',
-    year: 2023,
-    make: 'Porsche',
-    model: '911 GT3 RS',
-    trim: 'Weissach Package',
-    image: 'https://images.unsplash.com/photo-1614162692292-7ac56d7f7f1e?auto=format&fit=crop&q=80&w=800',
-    currentBid: 285500,
-    reservePrice: 295000,
-    reserveStatus: 'Reserve Pending',
-    startingBid: 220000,
-    timeLeft: 3450, // ~57 mins
-    durationDays: 3,
-    bidsCount: 22,
-    location: 'Stuttgart Airport depot (DE)',
-    sellerName: 'Black Forest Asset Holdings',
-    sellerRating: 4.9,
-    valuation: 280000,
-    category: 'Sports',
-    riskScore: 'Low',
-    customsTaxDetails: 'EU Customs Cleared. Subject to direct VAT refund for non-EU corporate exports.',
-    history: [
-      { bidder: 'Sovereign_Alpha_Trader', amount: 285500, time: '2 mins ago', verified: true },
-      { bidder: 'Hermann_P', amount: 284000, time: '14 mins ago', verified: true },
-      { bidder: 'Sovereign_Alpha_Trader', amount: 281000, time: '35 mins ago', verified: true },
-      { bidder: 'Stuttgart_Classic_Ltd', amount: 275000, time: '2 hours ago', verified: true },
-      { bidder: 'Hermann_P', amount: 260000, time: '4 hours ago', verified: true }
-    ],
-  },
-  {
-    id: 'AUC-BMW-M8',
-    vin: 'WBAAF8C03NCX811451',
-    year: 2022,
-    make: 'BMW',
-    model: 'M8 Competition Gran Coupe',
-    trim: 'First Edition Spec',
-    image: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&q=80&w=800',
-    currentBid: 114200,
-    reservePrice: 110000,
-    reserveStatus: 'Reserve Met',
-    startingBid: 85000,
-    timeLeft: 54000, // ~15 hours
-    durationDays: 1,
-    bidsCount: 17,
-    location: 'Munich Port Lockup (DE)',
-    sellerName: 'Bavaria Fleet Liquidators',
-    sellerRating: 4.8,
-    valuation: 112000,
-    category: 'Executive',
-    riskScore: 'Low',
-    customsTaxDetails: 'Requires cross-border transit declaration. Export shipping quote integrated.',
-    history: [
-      { bidder: 'Marcus_Motors_Zurich', amount: 114200, time: '1 hour ago', verified: true },
-      { bidder: 'Munich_Express_Broker', amount: 112000, time: '2 hours ago', verified: true },
-      { bidder: 'Marcus_Motors_Zurich', amount: 110000, time: '3 hours ago', verified: true },
-      { bidder: 'Saudi_VIP_Garage', amount: 105000, time: '8 hours ago', verified: true }
-    ],
-  },
-  {
-    id: 'AUC-TES-PLAID',
-    vin: '5YJS1EAE1NF891542',
-    year: 2023,
-    make: 'Tesla',
-    model: 'Model S Plaid',
-    trim: 'Carbon Dynamic Package',
-    image: 'https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=800',
-    currentBid: 84500,
-    reservePrice: 85000,
-    reserveStatus: 'No Reserve',
-    startingBid: 60000,
-    timeLeft: 234000, // ~2.7 days
-    durationDays: 7,
-    bidsCount: 11,
-    location: 'Port of Rotterdam Terminal (NL)',
-    sellerName: 'Sovereign EV Fleet Sourcing',
-    sellerRating: 5.0,
-    valuation: 82000,
-    category: 'Electric',
-    riskScore: 'Medium',
-    customsTaxDetails: 'Li-ion battery freight safety inspection certificate index signed.',
-    history: [
-      { bidder: 'EcoDrivetrain_NL', amount: 84500, time: '30 mins ago', verified: true },
-      { bidder: 'Stut_Electric', amount: 82000, time: '3 hours ago', verified: true },
-      { bidder: 'EcoDrivetrain_NL', amount: 80000, time: '1 day ago', verified: true }
-    ],
-  }
-];
-
 export default function AuctionsSection() {
-  const [auctions, setAuctions] = useState<AuctionListing[]>(INITIAL_AUCTIONS);
+  const { user } = useAuth();
+  const [auctions, setAuctions] = useState<AuctionListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedAuctionId, setSelectedAuctionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchAuctions() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await api.get('/auctions');
+        // The backend returns an array of auction objects. We need to map them to AuctionListing.
+        const mapped: AuctionListing[] = data.map((a: any) => ({
+          id: a.id,
+          vin: a.vehicle.vin,
+          year: a.vehicle.year,
+          make: a.vehicle.make,
+          model: a.vehicle.model,
+          trim: a.vehicle.bodyType || '',
+          image: a.vehicle.photos?.find((p: any) => p.isPrimary)?.url || a.vehicle.photos?.[0]?.url || 'https://images.unsplash.com/photo-1542282088-fe8426682b8f?auto=format&fit=crop&q=80&w=800',
+          currentBid: a.currentBid,
+          reservePrice: a.reservePrice || 0,
+          reserveStatus: a.reservePrice ? (a.currentBid >= a.reservePrice ? 'Reserve Met' : 'Reserve Pending') : 'No Reserve',
+          startingBid: a.startingPrice,
+          timeLeft: Math.max(0, Math.floor((new Date(a.endTime).getTime() - Date.now()) / 1000)),
+          durationDays: Math.ceil((new Date(a.endTime).getTime() - new Date(a.startTime).getTime()) / (1000 * 3600 * 24)),
+          bidsCount: a._count?.bids || 0, // Assuming _count.bids is included if we want real count, or we'll get it from auction detail
+          location: `${a.vehicle.city}, ${a.vehicle.country}`,
+          sellerName: `${a.seller.firstName} ${a.seller.lastName}`,
+          sellerRating: 4.8, // Mock as backend doesn't have it yet
+          valuation: a.vehicle.price, // Using vehicle price as valuation for now
+          category: 'Executive', // Mock category
+          riskScore: 'Low',
+          customsTaxDetails: 'Local registration files verified.',
+          history: [] // History is fetched per auction
+        }));
+        setAuctions(mapped);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : 'Failed to load auctions');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchAuctions();
+  }, []);
+
+  // Sync selected auction details if one is selected
+  useEffect(() => {
+    if (!selectedAuctionId) return;
+
+    async function fetchDetails() {
+      try {
+        const a = await api.get(`/auctions/${selectedAuctionId}`);
+        const mappedHistory = (a.bids || []).map((b: any) => ({
+          bidder: `${b.bidder.firstName} ${b.bidder.lastName.charAt(0)}.`,
+          amount: b.amount,
+          time: new Date(b.createdAt).toLocaleTimeString(),
+          verified: true
+        }));
+
+        setAuctions(prev => prev.map(auc => {
+          if (auc.id === selectedAuctionId) {
+            return {
+              ...auc,
+              currentBid: a.currentBid,
+              bidsCount: a.bids?.length || 0,
+              history: mappedHistory,
+              reserveStatus: a.reservePrice ? (a.currentBid >= a.reservePrice ? 'Reserve Met' : 'Reserve Pending') : 'No Reserve',
+            };
+          }
+          return auc;
+        }));
+      } catch (err) {
+        console.error('Failed to fetch auction details', err);
+      }
+    }
+
+    fetchDetails();
+    const interval = setInterval(fetchDetails, 10000); // Poll every 10s for bids
+    return () => clearInterval(interval);
+  }, [selectedAuctionId]);
 
   // Search, sorting & filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -364,7 +356,8 @@ export default function AuctionsSection() {
   };
 
   // Place interactive bid
-  const handlePlaceBid = (e: React.FormEvent) => {
+  const [isPlacingBid, setIsPlacingBid] = useState(false);
+  const handlePlaceBid = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAuction) return;
 
@@ -393,35 +386,30 @@ export default function AuctionsSection() {
       if (!confirmProceed) return;
     }
 
-    // Add bid history and update auction current state!
-    setAuctions(prev => prev.map(auc => {
-      if (auc.id === selectedAuction.id) {
-        const updatedHistory = [{
-          bidder: 'John Doe (You)',
-          amount: enteredAmount,
-          time: 'Just now',
-          verified: true
-        }, ...auc.history];
-
-        let newReserveStatus = auc.reserveStatus;
-        if (auc.reservePrice > 0 && enteredAmount >= auc.reservePrice) {
-          newReserveStatus = 'Reserve Met';
+    setIsPlacingBid(true);
+    try {
+      const updatedAuction = await api.post(`/auctions/${selectedAuction.id}/bid`, { amount: enteredAmount });
+      
+      // Update local state with the result from backend
+      setAuctions(prev => prev.map(auc => {
+        if (auc.id === selectedAuction.id) {
+          return {
+            ...auc,
+            currentBid: updatedAuction.currentBid,
+            bidsCount: (auc.bidsCount || 0) + 1,
+            reserveStatus: updatedAuction.reservePrice ? (updatedAuction.currentBid >= updatedAuction.reservePrice ? 'Reserve Met' : 'Reserve Pending') : 'No Reserve',
+          };
         }
+        return auc;
+      }));
 
-        return {
-          ...auc,
-          currentBid: enteredAmount,
-          bidsCount: auc.bidsCount + 1,
-          reserveStatus: newReserveStatus,
-          history: updatedHistory
-        };
-      }
-      return auc;
-    }));
-
-    // Trigger local audio feedback or visual logs
-    setUserBidValue('');
-    alert("Escrow Bidding Registered Successfully under direct ledger tracker!");
+      setUserBidValue('');
+      alert("Escrow Bidding Registered Successfully under direct ledger tracker!");
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : 'Failed to place bid');
+    } finally {
+      setIsPlacingBid(false);
+    }
   };
 
   // Interactive scheduler booking
@@ -483,6 +471,43 @@ export default function AuctionsSection() {
   return (
     <div className="space-y-8 py-3 text-slate-800 font-sans" id="auctions-integrated-division">
       
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-20 space-y-4">
+          <Loader2 className="w-10 h-10 text-[#8B0000] animate-spin" />
+          <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Accessing Auction Floor...</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 p-6 rounded-2xl text-center">
+          <AlertTriangle className="w-12 h-12 text-red-600 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-red-900">Connection Interrupted</h3>
+          <p className="text-sm text-red-700 mt-1">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-6 py-2 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      )}
+
+      {!loading && !error && auctions.length === 0 && !showCreateAuctionForm && !selectedAuctionId && (
+        <div className="text-center py-20 bg-slate-50 border border-dashed border-slate-300 rounded-3xl">
+          <Database className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+          <h3 className="text-xl font-black text-slate-900">No Active Auctions</h3>
+          <p className="text-slate-500 mt-2 max-w-md mx-auto">
+            The sovereign floor is currently clear. Be the first to establish a listing under decentralized rules.
+          </p>
+          <button
+            onClick={() => setShowCreateAuctionForm(true)}
+            className="mt-6 flex items-center gap-2 bg-[#8B0000] text-white px-6 py-3 rounded-2xl font-black hover:bg-red-900 transition-all mx-auto"
+          >
+            <Plus className="w-5 h-5" /> Start First Listing
+          </button>
+        </div>
+      )}
+
       {/* 1. TOP HEADER BRAND BLOCK */}
       {!showCreateAuctionForm && !selectedAuctionId && (
         <div className="text-left pb-1 pt-2">

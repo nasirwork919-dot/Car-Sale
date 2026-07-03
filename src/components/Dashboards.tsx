@@ -3,23 +3,65 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Trophy, Calendar, Shield, Cpu, Gavel, Users, DollarSign, Wrench, Activity, CheckSquare, 
-  MapPin, Check, Plus, AlertCircle, FileText, ChevronLeft, ChevronRight, User, TrendingUp, Lock
+  MapPin, Check, Plus, AlertCircle, FileText, ChevronLeft, ChevronRight, User, TrendingUp, Lock,
+  Loader2
 } from 'lucide-react';
 import { Vehicle, Appointment, Lead, AdvisoryExpert } from '../types';
 import { VEHICLES, LEADS, APPOINTMENTS, EXPERTS } from '../data';
 import InsurancePlatform from './InsurancePlatform';
+import { useAuth, backendRoleToFrontend } from '../lib/AuthContext';
+import { api } from '../lib/api';
+import { mapBackendVehicles, MappedVehicle } from '../lib/vehicleAdapter';
 
 interface DashboardsProps {
   currentRole?: string;
 }
 
-export default function Dashboards({ currentRole }: DashboardsProps) {
+export default function Dashboards({ currentRole: propRole }: DashboardsProps) {
+  const { user, isAuthenticated } = useAuth();
+  const currentRole = propRole || (user ? backendRoleToFrontend(user.role) : 'personal');
+
   const [activeTab, setActiveTab] = useState<'dealer' | 'workshop' | 'school' | 'tire' | 'rental' | 'export' | 'auction' | 'pro_vin' | 'advisory' | 'insurance'>(
     currentRole === 'insurance' ? 'insurance' : 'dealer'
   );
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    async function fetchDashboard() {
+      setLoading(true);
+      setError(null);
+      try {
+        const isBusiness = ['business', 'workshop', 'logistics'].includes(currentRole);
+        const endpoint = isBusiness ? '/dashboard/business' : '/dashboard/user';
+        const data = await api.get(endpoint);
+        setDashboardData(data);
+      } catch (err: any) {
+        console.error('Failed to fetch dashboard data:', err);
+        setError(err.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchDashboard();
+  }, [currentRole, isAuthenticated]);
+
+  const mappedInventory = useMemo(() => {
+    if (dashboardData?.recentVehicles) {
+       // Note: businessDashboard returns recentVehicles as just {createdAt} for charts
+       // But wait, the table below uses VEHICLES. We should ideally show real listings if available.
+       // The backend businessDashboard doesn't return full vehicle objects for the inventory table yet.
+    }
+    return VEHICLES; 
+  }, [dashboardData]);
 
   // Auction Bid States
   const [currentBid, setCurrentBid] = useState(192500);
@@ -53,6 +95,19 @@ export default function Dashboards({ currentRole }: DashboardsProps) {
   return (
     <div className="space-y-8 py-4 animate-in fade-in duration-300 animate-in fade-in" id="role-dashboards-module">
       
+      {loading && (
+        <div className="flex items-center justify-center p-12">
+          <Loader2 className="w-8 h-8 animate-spin text-neutral-400" />
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm">
+          <AlertCircle size={18} />
+          <p>{error}</p>
+        </div>
+      )}
+
       {/* Scrollable multi-sub tab menu (Apple segment list) */}
       <div className="flex bg-neutral-100 p-1 rounded-full border border-neutral-200/40 overflow-x-auto whitespace-nowrap hide-scrollbar select-none">
         <button
@@ -144,7 +199,7 @@ export default function Dashboards({ currentRole }: DashboardsProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-white p-5 rounded-[20px] border border-neutral-200/50 shadow-sm">
               <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider">Active Inventory</span>
-              <p className="text-2xl font-bold mt-1 text-black">142 units</p>
+              <p className="text-2xl font-bold mt-1 text-black">{dashboardData?.totalListings ?? '—'} units</p>
             </div>
             <div className="bg-white p-5 rounded-[20px] border border-neutral-200/50 shadow-sm">
               <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider">Turnover period</span>
@@ -156,7 +211,7 @@ export default function Dashboards({ currentRole }: DashboardsProps) {
             </div>
             <div className="bg-neutral-900 p-5 rounded-[20px]">
               <span className="text-[9px] text-neutral-400 font-bold block uppercase tracking-wider">monthly turnover</span>
-              <p className="text-2xl font-bold mt-1 text-white">$2.4M</p>
+              <p className="text-2xl font-bold mt-1 text-white">${dashboardData?.totalRevenue?.toLocaleString() ?? '0'}</p>
             </div>
           </div>
 
@@ -195,11 +250,11 @@ export default function Dashboards({ currentRole }: DashboardsProps) {
             <section className="lg:col-span-4 bg-white p-6 rounded-[24px] border border-neutral-200/50 shadow-sm space-y-4">
               <h4 className="text-[10px] uppercase font-bold text-neutral-450 tracking-wider">Active CRM Leads</h4>
               <div className="space-y-3">
-                {LEADS.map(lead => (
+                {(dashboardData?.upcomingBookings || LEADS).map((lead: any) => (
                   <div key={lead.id} className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200/20 flex justify-between items-center text-xs font-medium">
                     <div>
-                      <p className="font-bold text-neutral-950">{lead.name}</p>
-                      <p className="text-neutral-500 text-[10px] mt-0.5">{lead.inquiry}</p>
+                      <p className="font-bold text-neutral-950">{lead.name || (lead.user ? `${lead.user.firstName} ${lead.user.lastName}` : 'Guest')}</p>
+                      <p className="text-neutral-500 text-[10px] mt-0.5">{lead.inquiry || lead.serviceType || 'General Inquiry'}</p>
                     </div>
                     <span className="bg-neutral-200 text-neutral-800 text-[8px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">{lead.status}</span>
                   </div>

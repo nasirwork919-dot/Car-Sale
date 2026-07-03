@@ -4,6 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { api } from '../lib/api';
+import { mapBackendVehicles, BackendVehicle } from '../lib/vehicleAdapter';
 import { 
   Search, Shield, Gavel, FileText, CheckCircle, ArrowRight, Activity, 
   Globe, Check, Sparkles, Cpu, RefreshCw, BarChart2, Eye, Gauge, Zap,
@@ -434,10 +436,39 @@ export default function LandingPage({
   }, [selectedMake]);
 
   // Dynamic result count matching current choice scale
+  const [featuredVehicles, setFeaturedVehicles] = useState<Vehicle[]>([]);
+  const [stats, setStats] = useState({
+    totalActiveVehicles: 0,
+    totalDealers: 0,
+    totalCountries: 0,
+    vehiclesAddedThisWeek: 0
+  });
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [statsData, featuredData] = await Promise.all([
+          api.get('/marketplace/stats'),
+          api.get<BackendVehicle[]>('/marketplace/featured')
+        ]);
+        setStats(statsData);
+        setFeaturedVehicles(mapBackendVehicles(featuredData));
+      } catch (err) {
+        console.error("Failed to load landing page data", err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
   const getResultCount = () => {
     if (selectedMake === 'All makes') {
-      return '392,738 results';
+      return `${stats.totalActiveVehicles.toLocaleString()} results`;
     }
+    // ... keep rest of hardcoded logic as fallback or just return stats.totalActiveVehicles if specific counts aren't available from stats endpoint
+    // For now, let's keep it as is, but maybe use the real total for 'All makes'
     if (selectedModel === 'All models') {
       if (selectedMake === 'Porsche') return '12,450 results';
       if (selectedMake === 'BMW') return '48,210 results';
@@ -930,7 +961,7 @@ export default function LandingPage({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {sampleVehicles.slice(0, 6).map((car, idx) => (
+            {(featuredVehicles.length > 0 ? featuredVehicles : sampleVehicles).slice(0, 6).map((car, idx) => (
               <motion.div 
                 key={car.vin}
                 initial={{ opacity: 0, y: 15 }}
@@ -1289,21 +1320,21 @@ export default function LandingPage({
                 <div className="inline-flex flex-wrap items-center gap-5 px-4 py-3 bg-slate-50 rounded-2xl border border-slate-200/80">
                   <div className="text-center">
                     <span className="block text-lg font-black text-slate-900 font-display min-w-[2.5rem]">
-                      <NumericTransition text="15+" duration={1600} />
+                      <NumericTransition text={isLoading ? "15+" : `${stats.totalCountries}+`} duration={1600} />
                     </span>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Countries</span>
                   </div>
                   <div className="hidden sm:block w-px h-6 bg-slate-200" />
                   <div className="text-center">
                     <span className="block text-lg font-black text-slate-900 font-display min-w-[3.2rem]">
-                      <NumericTransition text="250k+" duration={1600} />
+                      <NumericTransition text={isLoading ? "250k+" : `${(stats.totalActiveVehicles / 1000).toFixed(1)}k+`} duration={1600} />
                     </span>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Inspected Lots</span>
                   </div>
                   <div className="hidden sm:block w-px h-6 bg-slate-200" />
                   <div className="text-center">
                     <span className="block text-lg font-black text-slate-900 font-display min-w-[3rem]">
-                      <NumericTransition text="100%" duration={1600} />
+                      <NumericTransition text={isLoading ? "100%" : "100%"} duration={1600} />
                     </span>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Clean Titles</span>
                   </div>

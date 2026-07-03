@@ -4,13 +4,16 @@
  */
 
 import React, { useState } from 'react';
-import { Mail, Phone, Lock, ArrowRight, ArrowLeft, CheckCircle, Shield, Briefcase, UserCheck, Landmark } from 'lucide-react';
+import { Mail, Phone, Lock, ArrowRight, ArrowLeft, CheckCircle, Shield, Briefcase, UserCheck, Landmark, AlertCircle } from 'lucide-react';
+import { useAuth, frontendRoleToBackend } from '../lib/AuthContext';
+import { ApiError } from '../lib/api';
 
 interface AuthJourneyProps {
   onSuccess: (role: 'personal' | 'business' | 'insurance' | 'government' | 'police') => void;
 }
 
 export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
+  const { register, selectRole, completeProfile } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -18,7 +21,11 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [intent, setIntent] = useState<'personal' | 'business' | 'insurance' | 'government' | 'police'>('personal');
-  
+
+  const [registering, setRegistering] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   // Step 2 OTP
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [otpResendText, setOtpResendText] = useState('Resend Code');
@@ -33,12 +40,22 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
   const matchesUpper = /[A-Z]/.test(password);
   const matchesNumber = /[0-9]/.test(password);
 
-  const handleStep1Submit = (e: React.FormEvent) => {
+  const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (firstName && lastName && email && password) {
-      setStep(2);
-    } else {
+    setErrorMsg(null);
+    if (!(firstName && lastName && email && password)) {
       alert("Please ensure all required fields are filled.");
+      return;
+    }
+    setRegistering(true);
+    try {
+      await register({ firstName, lastName, email, password, phone: phone || undefined });
+      setStep(2);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Unable to create your account. Please try again.';
+      setErrorMsg(message);
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -52,30 +69,59 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
     }
   };
 
-  const handleIntentSelection = (selected: 'personal' | 'business' | 'insurance' | 'government' | 'police') => {
+  const handleIntentSelection = async (selected: 'personal' | 'business' | 'insurance' | 'government' | 'police') => {
     setIntent(selected);
     if (selected === 'personal') {
-      alert("Registration successful as Personal Buyer!");
       onSuccess('personal');
-    } else if (selected === 'police') {
-      alert("Registration successful as Police / Law Enforcement!");
-      onSuccess('police');
-    } else if (selected === 'insurance') {
-      alert("Registration successful as Insurance Portal underwriter!");
-      onSuccess('insurance');
-    } else {
+      return;
+    }
+    if (selected === 'business' || selected === 'government') {
       setBusinessType('dealership');
       setStep(4);
+      return;
+    }
+    if (selected === 'police') {
+      alert('Registration successful! Police / Law Enforcement access requires manual provisioning by a system administrator — you will be notified once your credentials are activated.');
+      onSuccess('police');
+      return;
+    }
+
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      const res = await selectRole(frontendRoleToBackend(selected));
+      alert(`Registration successful! Your Insurance Portal underwriter access request has been submitted for admin approval. (${res.message})`);
+      onSuccess(selected);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Unable to select this account type. Please try again.';
+      setErrorMsg(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleBusinessProfileSubmit = (e: React.FormEvent) => {
+  const handleBusinessProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (companyName && taxId) {
-      alert(`Registration complete! Corporate/Government Profile created for "${companyName}".`);
-      onSuccess(intent);
-    } else {
+    if (!(companyName && taxId)) {
       alert("Please provide the organization name and ID.");
+      return;
+    }
+    setSubmitting(true);
+    setErrorMsg(null);
+    try {
+      await completeProfile({ country: '', city: '' });
+      if (intent === 'business') {
+        const res = await selectRole(frontendRoleToBackend('business'));
+        alert(`Registration complete! Corporate profile created for "${companyName}". ${res.message}`);
+      } else {
+        alert(`Registration complete! Profile created for "${companyName}". Government access requires manual provisioning by a system administrator — you will be notified once your credentials are activated.`);
+      }
+      onSuccess(intent);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Unable to complete your profile. Please try again.';
+      setErrorMsg(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -139,6 +185,13 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
             <h3 className="text-base font-bold text-[#8B0000] tracking-tight">Create your credentials</h3>
             <p className="text-xs text-slate-400">Establish a profile for clean legal title clearances and marketplace queries.</p>
           </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-red-50 text-red-600 rounded-2xl flex items-center gap-2 text-xs font-medium border border-red-100">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
 
           <form onSubmit={handleStep1Submit} className="space-y-4 text-xs font-bold">
             <div className="grid grid-cols-2 gap-4">
@@ -225,9 +278,19 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
 
             <button
               type="submit"
-              className="w-full h-11 bg-[#8B0000] text-white rounded-full font-bold text-xs transition-all hover:bg-neutral-900 shadow-sm flex items-center justify-center gap-1.5"
+              disabled={registering}
+              className="w-full h-11 bg-[#8B0000] text-white rounded-full font-bold text-xs transition-all hover:bg-neutral-900 shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
-              Continue <ArrowRight className="w-3.5 h-3.5" />
+              {registering ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                  <span>Creating account...</span>
+                </>
+              ) : (
+                <>
+                  Continue <ArrowRight className="w-3.5 h-3.5" />
+                </>
+              )}
             </button>
           </form>
         </fieldset>
@@ -303,6 +366,20 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
               Your structural role guides compliance rules, escrow limitations, and freight authorization levels.
             </p>
           </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-red-50 text-red-600 rounded-2xl flex items-center gap-2 text-xs font-medium border border-red-100 max-w-lg mx-auto">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {submitting && (
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-neutral-500">
+              <div className="w-3.5 h-3.5 border-2 border-neutral-300 border-t-neutral-700 rounded-full animate-spin"></div>
+              <span>Submitting your account type...</span>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Card */}
@@ -469,11 +546,26 @@ export default function AuthJourney({ onSuccess }: AuthJourneyProps) {
               <p>JustCarSale cross-checks organization identifiers automatically against state and federal registries. Access approvals complete typically under 2 hours.</p>
             </div>
 
+            {errorMsg && (
+              <div className="p-3 bg-red-50 text-red-600 rounded-2xl flex items-center gap-2 text-xs font-medium border border-red-100">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
             <button
               type="submit"
-              className="w-full h-11 bg-black text-white rounded-full font-semibold text-xs transition-all hover:opacity-90 shadow-sm"
+              disabled={submitting}
+              className="w-full h-11 bg-black text-white rounded-full font-semibold text-xs transition-all hover:opacity-90 shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
             >
-              Verify &amp; Activate Portal
+              {submitting ? (
+                <>
+                  <div className="w-3 h-3 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                  <span>Activating...</span>
+                </>
+              ) : (
+                <span>Verify &amp; Activate Portal</span>
+              )}
             </button>
           </form>
 

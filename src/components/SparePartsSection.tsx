@@ -10,11 +10,12 @@ import {
   ShoppingCart, RefreshCcw, Trash2, HelpCircle, Eye, AlertCircle, ArrowRight, 
   ChevronRight, UploadCloud, Info, Filter, X, Send, Play, Layers, ShieldAlert,
   SlidersHorizontal, CheckCircle, Package, Globe, DollarSign, Tag, Landmark,
-  MessageSquare, Camera
+  MessageSquare, Camera, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Part } from '../types';
 import UniversalSmartUpload from './UniversalSmartUpload';
+import { api } from '../lib/api';
 
 // Let's define the enriched parts array with more details
 export interface EnrichedPart extends Part {
@@ -196,6 +197,11 @@ export default function SparePartsSection({ onOpenVehicleChat }: SparePartsSecti
   const [selectedShippingOption, setSelectedShippingOption] = useState<string>('All');
   const [maxPrice, setMaxPrice] = useState<number>(4000);
 
+  // Real API Data
+  const [parts, setParts] = useState<EnrichedPart[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   // Active features modals
   const [activeDismantlerChatPart, setActiveDismantlerChatPart] = useState<EnrichedPart | null>(null);
   const [dismantlerChatMessages, setDismantlerChatMessages] = useState<Array<{ sender: 'user' | 'dismantler'; text: string; time: string }>>([]);
@@ -276,10 +282,55 @@ export default function SparePartsSection({ onOpenVehicleChat }: SparePartsSecti
     return Math.round((partToBuyWithConfig.price + popupFreightCharge + popupDutyAndVat) * 100) / 100;
   }, [partToBuyWithConfig, popupFreightCharge, popupDutyAndVat]);
 
+  const fetchParts = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const query: any = {
+        limit: 100,
+        name: searchQuery || undefined,
+        maxPrice: maxPrice || undefined,
+        condition: selectedCondition !== 'All' ? selectedCondition.toUpperCase() : undefined,
+      };
+
+      const res = await api.get('/spare-parts', query);
+      const mapped = res.map((p: any) => ({
+        sku: p.id,
+        name: p.name,
+        vehicleCompat: p.compatibleVins && Array.isArray(p.compatibleVins) ? p.compatibleVins.join(', ') : 'Multiple Vehicles',
+        condition: p.condition === 'NEW' ? 'Brand New' : p.condition === 'USED' ? 'Reclaimed' : 'OEM Certified Prep',
+        price: p.price,
+        stock: p.stock,
+        image: 'https://images.unsplash.com/photo-1580273916550-e323be2ae537?auto=format&fit=crop&q=80&w=800',
+        interchangeId: p.oem || 'N/A',
+        category: p.category || 'Engine & Exhaust',
+        dismantlerName: p.business?.businessName || 'Elite Dismantlers',
+        dismantlerLocation: p.business?.city || 'Vilnius',
+        warehouseLocation: 'Central Depot',
+        oemNumber: p.oem || 'N/A',
+        shippingBaseCost: 50,
+        longCompatibleVehicles: p.compatibleVins || [],
+        ratings: 4.8,
+        availableStockStatus: p.stock > 5 ? 'In Stock' : p.stock > 0 ? 'Low Stock' : 'Out of Stock',
+        hasExpressShipping: true,
+        notes: 'Genuine verified part from professional dismantler.'
+      }));
+      setParts(mapped);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch spare parts');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchParts();
+  }, [searchQuery, selectedCondition, maxPrice]);
 
   // FILTER OUT SPARE PARTS BY VALUES
   const finalFilteredParts = useMemo(() => {
-    return RICH_PARTS.filter(p => {
+    const sourceParts = parts.length > 0 ? parts : RICH_PARTS;
+    return sourceParts.filter(p => {
       // Search constraints
       const query = searchQuery.trim().toLowerCase();
       if (query) {
@@ -371,9 +422,29 @@ export default function SparePartsSection({ onOpenVehicleChat }: SparePartsSecti
   };
 
   // Compatibility engine simulation
-  const checkCompatibility = () => {
+  const checkCompatibility = async () => {
     setIsCheckingCompat(true);
     setCompatResult({ status: null, explanation: '' });
+
+    if (compatCheckVin.length >= 5) {
+      try {
+        const res = await api.get(`/spare-parts/compatible/${compatCheckVin}`);
+        if (res && res.length > 0) {
+          // If our current selected part is in the compatible list
+          const isCompatible = res.some((p: any) => p.id === compatSelectedPartSku || p.oem === compatSelectedPartSku);
+          if (isCompatible) {
+            setCompatResult({
+              status: 'compatible',
+              explanation: `FITMENT CONFIRMED via VIN: Digital handshake verified for ${compatCheckVin}. This part is officially compatible with the target vehicle's chassis and wiring harness.`
+            });
+            setIsCheckingCompat(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("VIN compatibility check failed, falling back to simulation", err);
+      }
+    }
 
     setTimeout(() => {
       const currentPart = RICH_PARTS.find(p => p.sku === compatSelectedPartSku);

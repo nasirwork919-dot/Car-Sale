@@ -77,24 +77,101 @@ function getDistanceKM(lat1: number, lon1: number, lat2: number, lon2: number): 
   return R * c;
 }
 
+import { api } from '../lib/api';
+import { mapBackendVehicles, BackendVehicle } from '../lib/vehicleAdapter';
+
 interface MarketplaceProps {
-  vehicles: Vehicle[];
   onSelectVehicle: (vin: string) => void;
   onOpenVehicleChat?: (vin?: string) => void;
   searchQuery?: string;
   onSearchQueryChange?: (val: string) => void;
 }
 
-export default function Marketplace({ vehicles, onSelectVehicle, onOpenVehicleChat, searchQuery, onSearchQueryChange }: MarketplaceProps) {
+export default function Marketplace({ onSelectVehicle, onOpenVehicleChat, searchQuery, onSearchQueryChange }: MarketplaceProps) {
   // Navigation & Primary Layout State
   const [layoutMode, setLayoutMode] = useState<'grid' | 'list' | 'map'>('grid');
   const [activeTab, setActiveTab] = useState<'buy' | 'saved_alerts' | 'sell' | 'parts' | 'auctions' | 'import_export' | 'damaged_vehicles' | 'car_rental'>('buy');
 
-  const [localVehicles, setLocalVehicles] = useState<Vehicle[]>(vehicles);
+  const [localVehicles, setLocalVehicles] = useState<Vehicle[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Hero Search Fields
+  const [heroCountry, setHeroCountry] = useState<string>('All');
+  const [heroRegion, setHeroRegion] = useState<string>('All');
+  const [heroCity, setHeroCity] = useState<string>('');
+  const [searchRadius, setSearchRadius] = useState<string>('All');
+  const [selectedMake, setSelectedMake] = useState<string>('All');
+  const [selectedModel, setSelectedModel] = useState<string>('All');
+  const [heroPriceRange, setHeroPriceRange] = useState<number>(350000);
+
+  // Advanced Sidebar Filters State
+  const [vehicleType, setVehicleType] = useState<string>('All');
+  const [fuelType, setFuelType] = useState<string>('All');
+  const [drivetrain, setDrivetrain] = useState<string>('All');
+  const [condition, setCondition] = useState<string>('All');
+  const [sellerType, setSellerType] = useState<string>('All');
+  const [importExport, setImportExport] = useState<string>('All');
+  const [accidentHistory, setAccidentHistory] = useState<string>('All');
+  const [mileageMax, setMileageMax] = useState<number>(120000);
+  const [ownershipHistory, setOwnershipHistory] = useState<string>('All');
+
+  // Sorting
+  const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'mileage_asc' | 'year_desc'>('relevance');
 
   useEffect(() => {
-    setLocalVehicles(vehicles);
-  }, [vehicles]);
+    async function fetchVehicles() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const query: any = {
+          page,
+          limit: 12,
+          sortBy: sortBy === 'relevance' ? 'newest' : sortBy,
+          make: selectedMake !== 'All' ? selectedMake : undefined,
+          model: selectedModel !== 'All' ? selectedModel : undefined,
+          maxPrice: heroPriceRange,
+          country: heroCountry !== 'All' ? heroCountry : undefined,
+          city: heroCity.trim() || undefined,
+          condition: condition !== 'All' ? condition.toUpperCase() : undefined,
+          fuelType: fuelType !== 'All' ? fuelType : undefined,
+          transmission: drivetrain !== 'All' ? drivetrain : undefined,
+          maxMileage: mileageMax,
+          search: searchQuery || undefined,
+        };
+
+        const res = await api.getPaginated<BackendVehicle[]>('/vehicles', query);
+        setLocalVehicles(mapBackendVehicles(res.data));
+        if (res.meta) {
+          setTotalPages(res.meta.totalPages);
+          setTotalCount(res.meta.total);
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to load vehicles");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    if (activeTab === 'buy') {
+      fetchVehicles();
+    }
+  }, [
+    activeTab, page, sortBy, selectedMake, selectedModel, heroPriceRange, 
+    heroCountry, heroCity, condition, fuelType, drivetrain, mileageMax
+  ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    sortBy, selectedMake, selectedModel, heroPriceRange, 
+    heroCountry, heroCity, condition, fuelType, drivetrain, mileageMax
+  ]);
 
   useEffect(() => {
     if (searchQuery === 'Sell') {
@@ -130,26 +207,6 @@ export default function Marketplace({ vehicles, onSelectVehicle, onOpenVehicleCh
     }
   }, [searchQuery, onSearchQueryChange]);
 
-  // Hero Search Fields
-  const [heroCountry, setHeroCountry] = useState<string>('All');
-  const [heroRegion, setHeroRegion] = useState<string>('All');
-  const [heroCity, setHeroCity] = useState<string>('');
-  const [searchRadius, setSearchRadius] = useState<string>('All');
-  const [selectedMake, setSelectedMake] = useState<string>('All');
-  const [selectedModel, setSelectedModel] = useState<string>('All');
-  const [heroPriceRange, setHeroPriceRange] = useState<number>(350000);
-
-  // Advanced Sidebar Filters State
-  const [vehicleType, setVehicleType] = useState<string>('All');
-  const [fuelType, setFuelType] = useState<string>('All');
-  const [drivetrain, setDrivetrain] = useState<string>('All');
-  const [condition, setCondition] = useState<string>('All');
-  const [sellerType, setSellerType] = useState<string>('All');
-  const [importExport, setImportExport] = useState<string>('All');
-  const [accidentHistory, setAccidentHistory] = useState<string>('All');
-  const [mileageMax, setMileageMax] = useState<number>(120000);
-  const [ownershipHistory, setOwnershipHistory] = useState<string>('All');
-
   // AI Search Assistant Toggle & State
   const [isAiSearchActive, setIsAiSearchActive] = useState<boolean>(false);
   const [aiInputText, setAiInputText] = useState<string>('');
@@ -173,9 +230,6 @@ export default function Marketplace({ vehicles, onSelectVehicle, onOpenVehicleCh
 
   // Interactive Price Guidance Overlay State (VIN-based)
   const [selectedPriceGuidanceVin, setSelectedPriceGuidanceVin] = useState<string | null>(null);
-
-  // Sorting
-  const [sortBy, setSortBy] = useState<'relevance' | 'price_asc' | 'price_desc' | 'mileage_asc' | 'year_desc'>('relevance');
 
   // Map Selected Vehicle Marker
   const [selectedMapCar, setSelectedMapCar] = useState<Vehicle | null>(null);
@@ -366,134 +420,7 @@ export default function Marketplace({ vehicles, onSelectVehicle, onOpenVehicleCh
   };
 
   // Core Filtering System Standard + Advanced Filters Sidebar Custom Matching
-  const finalFilteredVehicles = useMemo(() => {
-    // If the natural language assistant is active and a query was executed, use its matched core
-    const sourceList = aiFilteredResults !== null ? aiFilteredResults : localVehicles;
-
-    return sourceList.filter(car => {
-      // Hero Global Search: Country, Region, City
-      const matchesCountry = heroCountry === 'All' || car.location.toLowerCase().includes(heroCountry.toLowerCase());
-      
-      let matchesRegion = true;
-      if (heroRegion !== 'All') {
-        const regCode = heroRegion === 'California' ? 'CA' 
-                      : heroRegion === 'Illinois' ? 'IL' 
-                      : heroRegion === 'Texas' ? 'TX' 
-                      : heroRegion === 'Florida' ? 'FL'
-                      : heroRegion === 'Ontario' ? 'ON'
-                      : heroRegion === 'Bavaria' ? 'DE'
-                      : heroRegion === 'Dubai' ? 'UAE'
-                      : heroRegion === 'Tokyo' ? 'JP'
-                      : '';
-        matchesRegion = car.location.includes(regCode) || car.location.toLowerCase().includes(heroRegion.toLowerCase());
-      }
-
-      const matchesCity = !heroCity.trim() || car.location.toLowerCase().includes(heroCity.toLowerCase());
-
-      // Make / Model Dropdowns
-      const matchesMake = selectedMake === 'All' || car.make === selectedMake;
-      const matchesModel = selectedModel === 'All' || car.model === selectedModel;
-
-      // Price Limits
-      const matchesPrice = car.price <= heroPriceRange;
-
-      // Advanced Filters Sidebar Elements
-      // 1. Vehicle Type
-      let matchesType = true;
-      if (vehicleType !== 'All') {
-        if (vehicleType === 'SUV') matchesType = car.model.toLowerCase().match(/(rover|escalade|cruiser|ioniq)/i) !== null;
-        else if (vehicleType === 'Sedan') matchesType = car.model.toLowerCase().match(/(m5|elantra|model s|ct) /i) !== null || car.driveType.includes('Drive') || car.make === 'BMW';
-        else if (vehicleType === 'Coupe') matchesType = car.model.toLowerCase().match(/(carrera|black series|gt|mustang|supra)/i) !== null;
-        else if (vehicleType === 'Wagon') matchesType = car.model.toLowerCase().match(/(avant|combi)/i) !== null;
-        else if (vehicleType === 'EV') matchesType = car.engine.toLowerCase().includes('electric');
-      }
-
-      // 2. Fuel Type
-      let matchesFuel = true;
-      if (fuelType !== 'All') {
-        if (fuelType === 'Electric') matchesFuel = car.engine.toLowerCase().includes('electric') || car.make === 'Tesla';
-        else if (fuelType === 'Gasoline') matchesFuel = !car.engine.toLowerCase().includes('electric');
-        else if (fuelType === 'Hybrid') matchesFuel = car.engine.toLowerCase().includes('hybrid') || car.model.toLowerCase().includes('hybrid');
-      }
-
-      // 3. Drivetrain
-      let matchesDrivetrain = true;
-      if (drivetrain !== 'All') {
-        if (drivetrain === 'AWD') matchesDrivetrain = car.driveType.toLowerCase().includes('awd') || car.driveType.toLowerCase().includes('quattro');
-        else if (drivetrain === 'RWD') matchesDrivetrain = car.driveType.toLowerCase().includes('rwd');
-        else if (drivetrain === 'FWD') matchesDrivetrain = car.driveType.toLowerCase().includes('fwd');
-      }
-
-      // 4. Condition
-      let matchesCondition = true;
-      if (condition !== 'All') {
-        if (condition === 'CPO') matchesCondition = car.certified === true;
-        else if (condition === 'New') matchesCondition = car.mileage < 100;
-        else if (condition === 'Used') matchesCondition = car.mileage >= 100;
-        else if (condition === 'Classic') matchesCondition = car.year < 2018;
-      }
-
-      // 5. Seller Type
-      let matchesSeller = true;
-      if (sellerType !== 'All') {
-        if (sellerType === 'Dealership') matchesSeller = car.certified === true;
-        else if (sellerType === 'Certified Hub') matchesSeller = car.riskScore === 'Low';
-        else if (sellerType === 'Private Seller') matchesSeller = car.certified === false;
-      }
-
-      // 6. Import/Export availability
-      let matchesImport = true;
-      if (importExport !== 'All') {
-        if (importExport === 'Worldwide') matchesImport = car.status === 'Available' || car.status === 'Customs Pending';
-        else if (importExport === 'Cleared') matchesImport = car.status !== 'Customs Pending';
-      }
-
-      // 7. Accident History
-      let matchesAccidents = true;
-      if (accidentHistory !== 'All') {
-        if (accidentHistory === 'None') matchesAccidents = car.riskScore === 'Low';
-        else if (accidentHistory === 'Minor') matchesAccidents = car.riskScore !== 'High';
-      }
-
-      // 8. Mileage Range Max
-      const matchesMileage = car.mileage <= mileageMax;
-
-      // 9. Ownership
-      let matchesOwnership = true;
-      if (ownershipHistory !== 'All') {
-        if (ownershipHistory === 'Single Owner') matchesOwnership = car.mileage < 15000;
-      }
-
-      // 10. Search Radius (KM) from City, Region, or Country reference anchor
-      let matchesRadius = true;
-      if (searchRadius !== 'All') {
-        // Fallback references: use city if provided, else current region, else current country, else general default (Los Angeles)
-        const refAnchor = heroCity.trim() 
-          ? heroCity 
-          : (heroRegion !== 'All' ? heroRegion : (heroCountry !== 'All' ? heroCountry : 'Los Angeles'));
-        
-        const originCoords = getCoordinatesOfLocation(refAnchor);
-        const destCoords = getCoordinatesOfLocation(car.location);
-        const distanceKM = getDistanceKM(originCoords.lat, originCoords.lng, destCoords.lat, destCoords.lng);
-        matchesRadius = distanceKM <= Number(searchRadius);
-      }
-
-      return matchesCountry && matchesRegion && matchesCity && matchesMake && matchesModel && 
-             matchesPrice && matchesType && matchesFuel && matchesDrivetrain && matchesCondition && 
-             matchesSeller && matchesImport && matchesAccidents && matchesMileage && matchesOwnership &&
-             matchesRadius;
-    }).sort((a, b) => {
-      if (sortBy === 'price_asc') return a.price - b.price;
-      if (sortBy === 'price_desc') return b.price - a.price;
-      if (sortBy === 'mileage_asc') return a.mileage - b.mileage;
-      if (sortBy === 'year_desc') return b.year - a.year;
-      return b.valuation - a.valuation; // Default matches by high estimated conformity
-    });
-  }, [
-    vehicles, aiFilteredResults, heroCountry, heroRegion, heroCity, searchRadius, selectedMake, 
-    selectedModel, heroPriceRange, vehicleType, fuelType, drivetrain, condition, 
-    sellerType, importExport, accidentHistory, mileageMax, ownershipHistory, sortBy
-  ]);
+  const finalFilteredVehicles = localVehicles;
 
   // VIN Dynamic Calculator for 5-Year Ownership & Depreciation Estimates
   const fetchPriceGuidanceReport = (car: Vehicle) => {
@@ -1040,7 +967,34 @@ export default function Marketplace({ vehicles, onSelectVehicle, onOpenVehicleCh
             <div className="lg:col-span-9 space-y-4">
               
               {/* LAYOUT: GRID PRESENTATION */}
-              {layoutMode === 'grid' && (
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                  <RefreshCcw className="w-10 h-10 text-slate-400 animate-spin" />
+                  <p className="text-slate-500 font-medium">Aggregating real-time registry data...</p>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
+                  <AlertTriangle className="w-10 h-10 text-red-500" />
+                  <p className="text-slate-800 font-bold">{error}</p>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="text-[#B30000] font-bold underline"
+                  >
+                    Retry connection
+                  </button>
+                </div>
+              ) : finalFilteredVehicles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 space-y-4 text-center">
+                  <Search className="w-10 h-10 text-slate-300" />
+                  <p className="text-slate-500 font-medium text-lg">No vehicles found matching your specific criteria.</p>
+                  <button 
+                    onClick={handleClearFilters}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-full font-bold transition-all"
+                  >
+                    Reset all filters
+                  </button>
+                </div>
+              ) : layoutMode === 'grid' && (
                 <motion.div 
                   variants={containerVariants}
                   initial="hidden"

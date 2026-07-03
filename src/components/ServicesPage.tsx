@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Search, Droplets, Zap, Wind, Sparkles, Hammer, 
   Wrench, Car, Scissors, Stethoscope, GraduationCap,
   MapPin, HelpCircle, ShieldCheck, ChevronLeft, ChevronRight, CheckCircle,
   Truck, Bug, Sprout, Shield, FileText, Utensils, Heart, Camera, HardHat, Paintbrush,
   Palette, Disc, Megaphone, Grid, Crown, Gem, Award, Sliders, Layers, Scale,
-  User, ShieldX, Map as MapIcon, RefreshCw, Upload, AlertTriangle, Eye, Send, Star, Phone, Clock, X
+  User, ShieldX, Map as MapIcon, RefreshCw, Upload, AlertTriangle, Eye, Send, Star, Phone, Clock, X, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import UniversalSmartUpload from './UniversalSmartUpload';
@@ -22,6 +22,7 @@ import GlassRepairSection from './GlassRepairSection';
 import RustProtectionSection from './RustProtectionSection';
 import WrappingAdvertisingSection from './WrappingAdvertisingSection';
 import MetalworkFabricationSection from './MetalworkFabricationSection';
+import { api } from '../lib/api';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -350,6 +351,11 @@ export default function ServicesPage({
   const [searchCity, setSearchCity] = useState<string>('Vilnius, Lithuania');
   const [mapMode, setMapMode] = useState<boolean>(false);
   
+  // Real API Data
+  const [providers, setProviders] = useState<ServiceProviderItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   // Selected category trigger state
   const [selectedCat, setSelectedCat] = useState<string | null>(initialCategory);
 
@@ -403,7 +409,64 @@ export default function ServicesPage({
 
   const carouselRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  const fetchProviders = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const typeMap: Record<string, string> = {
+        'mechanics': 'WORKSHOP',
+        'auto-painters': 'PAINTER',
+        'tire-dealers': 'TIRE_SHOP',
+        'detailing': 'DETAILING',
+        'glass-repair': 'GLASS_REPAIR',
+        'rust-protection': 'WORKSHOP', // fallback
+        'wrapping': 'WRAPPING',
+        'metalwork': 'METALWORK',
+        'ev-specialists': 'WORKSHOP', // fallback
+        'gas-repair': 'WORKSHOP', // fallback
+        'upholstery': 'DETAILING', // fallback
+        'tax-registration': 'LAWYER', // fallback
+        'tuning-styling': 'WORKSHOP', // fallback
+        'automotive-consultants': 'LAWYER' // fallback
+      };
+
+      const query: any = {
+        limit: 50,
+        search: searchQuery || undefined,
+        businessType: selectedCat ? typeMap[selectedCat] : undefined
+      };
+
+      const res = await api.get('/businesses', query);
+      const mapped = res.map((b: any) => ({
+        id: b.id,
+        name: b.businessName,
+        category: Object.keys(typeMap).find(key => typeMap[key] === b.businessType) || 'mechanics',
+        specialty: b.description || 'Professional Automotive Service',
+        location: b.city || 'Vilnius',
+        address: b.address || '',
+        jobs: b.reviewCount * 10, // Mocking some jobs data based on reviews
+        rating: b.rating || 0,
+        rate: 50, // Mock rate
+        image: b.logo || b.coverImage || 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&q=80&w=600',
+        supportedBrands: ['All Brands'],
+        certifications: b.verified ? ['Verified Provider'] : [],
+        languages: ['Lithuanian', 'English'],
+        availability: 'today',
+        distance: 2.5
+      }));
+      setProviders(mapped);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch service providers');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProviders();
+  }, [selectedCat, searchQuery]);
+
+  useEffect(() => {
     setSelectedCat(initialCategory);
   }, [initialCategory]);
 
@@ -437,9 +500,9 @@ export default function ServicesPage({
 
   // Trigger search filters applying across ALL categories
   const filteredPopularProviders = useMemo(() => {
-    let list = [...SERVICE_PROVIDERS];
+    let list = providers.length > 0 ? [...providers] : [...SERVICE_PROVIDERS];
 
-    // Search query keyword filter
+    // Search query keyword filter (frontend secondary filter)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(p => 

@@ -1,0 +1,112 @@
+Steps 1-5 are complete. The entire backend is built with 30+ API endpoints covering auth, vehicles, marketplace, businesses, reviews, bookings, auctions, transport, VIN, inspections, insurance, claims, transfers, stolen reports, messaging, notifications, spare parts, documents, dashboards, admin, and search. Everything is tested and working.
+
+Now build Step 6: Wire the frontend to the real backend. Replace all mock/simulated data with real API calls.
+
+IMPORTANT RULES:
+- Do NOT redesign or restyle anything. The frontend design is final and approved.
+- Do NOT delete or restructure components. Keep the exact same file structure.
+- ONLY add API integration — replace hardcoded data with fetch calls to the real backend.
+- Use a simple fetch wrapper or create a /src/lib/api.ts utility.
+
+Here's what to wire up:
+
+1. AUTH INTEGRATION (src/components/SignIn.tsx + src/components/AuthJourney.tsx):
+   - Replace simulated login with POST /api/auth/login
+   - Replace simulated register with POST /api/auth/register
+   - Store JWT token in localStorage
+   - Store user object in localStorage
+   - On app load, check for token and call GET /api/auth/me to restore session
+   - Add logout function that clears token + user
+   - Replace the role simulation with real user.role from the JWT/me response
+   - Wire complete-profile to PUT /api/auth/complete-profile
+   - Wire role selection to PUT /api/auth/select-role
+
+2. MARKETPLACE (src/components/Marketplace.tsx):
+   - Replace hardcoded vehicle list with GET /api/vehicles (pass all filter params)
+   - Wire search bar to the search query param
+   - Wire filter sidebar to the actual query params (make, model, year range, price range, mileage range, fuel, transmission, body, condition, country, city)
+   - Wire sort dropdown to sortBy param
+   - Add real pagination (page, limit)
+   - Replace featured section with GET /api/marketplace/featured
+   - Replace stats with GET /api/marketplace/stats
+
+3. VEHICLE DETAILS (src/components/VehicleDetails.tsx):
+   - Replace mock data with GET /api/vehicles/:id
+   - Show real photos from VehiclePhotos
+   - Show real seller info
+   - Wire "Contact Seller" to the messaging system (POST /api/messages)
+
+4. LANDING PAGE (src/components/LandingPage.tsx):
+   - Wire stats counter to GET /api/marketplace/stats
+   - Wire featured vehicles to GET /api/marketplace/featured
+   - Wire search bar to navigate to marketplace with query params
+
+5. SELL VEHICLE (src/components/SellVehicleWizard.tsx):
+   - Wire form submission to POST /api/vehicles
+   - Wire photo upload step to POST /api/vehicles/:id/photos
+
+6. AUCTIONS (src/components/AuctionsSection.tsx):
+   - Replace mock auctions with GET /api/auctions
+   - Wire bid button to POST /api/auctions/:id/bid
+   - Show real countdown timer from endTime
+   - Show real current bid and bid count
+
+7. VIN HISTORY (src/components/VinHistoryPlatform.tsx):
+   - Wire VIN search to GET /api/vin/:vin
+   - Display real inspection history, ownership chain, stolen status
+   - Show fraud score from GET /api/vin/:vin/fraud-score
+
+8. DASHBOARDS (src/components/Dashboards.tsx):
+   - Wire user dashboard to GET /api/dashboard/user
+   - Wire business dashboard to GET /api/dashboard/business
+   - Wire to show real unread counts, recent activity, bookings
+
+9. GOVERNMENT PORTAL (src/components/government/GovernmentDashboard.tsx):
+   - Wire to GET /api/dashboard/government
+   - Wire inspection list to GET /api/inspections
+   - Wire create inspection form to POST /api/inspections
+
+10. POLICE PORTAL (src/components/government/PoliceDashboard.tsx):
+    - Wire to GET /api/dashboard/police
+    - Wire stolen reports list to GET /api/stolen-reports
+    - Wire status updates to PATCH /api/stolen-reports/:id/status
+
+11. SERVICES / BUSINESSES (src/components/ServicesPage.tsx):
+    - Replace mock business listings with GET /api/businesses
+    - Wire filters to query params (businessType, city, search)
+
+12. MESSAGING (src/components/SovereignClientChat.tsx or wherever chat lives):
+    - Wire to GET /api/messages/conversations for conversation list
+    - Wire to GET /api/messages/conversation/:userId for message thread
+    - Wire send to POST /api/messages
+    - Show unread counts from GET /api/messages/unread-count
+
+13. GLOBAL SEARCH:
+    - If there's a search bar in the header/nav, wire it to GET /api/search?q=
+    - Show results grouped by category (vehicles, businesses, parts)
+
+14. SPARE PARTS (src/components/SparePartsSection.tsx):
+    - Wire to GET /api/spare-parts with filters
+    - Wire VIN compatibility search to GET /api/spare-parts/compatible/:vin
+
+15. API UTILITY — Create src/lib/api.ts:
+    - Base URL: /api (uses the proxy)
+    - Helper functions: get(), post(), put(), patch(), del()
+    - Auto-attach Authorization: Bearer <token> header from localStorage
+    - Handle 401 responses by clearing token and redirecting to login
+    - Handle errors gracefully — show error messages, don't crash
+
+16. AUTH CONTEXT — Create src/lib/AuthContext.tsx (or add to existing state management):
+    - Provide user, token, login(), logout(), isAuthenticated across the app
+    - Wrap the app with this provider
+    - All components read auth state from here instead of local simulation
+
+For each component you modify:
+- Add loading states (show a spinner or skeleton while data loads)
+- Add error states (show a message if the API call fails)
+- Add empty states (show "No results" or "No vehicles found" when data is empty)
+- Keep ALL existing styling and animations exactly as they are
+
+Work through these one at a time. Start with the API utility and auth context since everything depends on those. Then do marketplace and vehicle details. Then dashboards. Then everything else.
+
+After each major integration, test that the page still renders correctly and data flows properly.

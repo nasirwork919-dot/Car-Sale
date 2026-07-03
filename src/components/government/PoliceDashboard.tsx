@@ -1,12 +1,18 @@
-import React, { useState, useMemo } from 'react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Shield, AlertTriangle, FileText, Search, Activity, Users, Download, Plus, 
   MapPin, CheckCircle, RefreshCw, Layers, BrainCircuit, ExternalLink, Calendar,
   Paperclip, Tag, ArrowRight, CornerDownRight, Scale, Trash2, CheckCircle2, X
 } from 'lucide-react';
-import { VEHICLES } from '../../data';
-import { Vehicle } from '../../types';
 import { NumericTransition } from '../AnimatedCounter';
+import { api } from '../../lib/api';
+import { useAuth } from '../../lib/AuthContext';
+import { VEHICLES } from '../../data';
 
 interface Evidence {
   id: string;
@@ -69,9 +75,13 @@ interface NetworkEdge {
 }
 
 export default function PoliceDashboard() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'cases' | 'watchlist' | 'ai-net' | 'alerts'>('cases');
-  const [selectedCaseId, setSelectedCaseId] = useState<string>('CASE-2026-01');
+  const [selectedCaseId, setSelectedCaseId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<any>(null);
   
   // Create / Edit Case Forms State
   const [showCreateCaseModal, setShowCreateCaseModal] = useState(false);
@@ -93,38 +103,7 @@ export default function PoliceDashboard() {
   const [selectedSeizureReport, setSelectedSeizureReport] = useState<Case | null>(null);
 
   // Stateful watchlists
-  const [watchlist, setWatchlist] = useState<WatchlistVehicle[]>([
-    {
-      vin: 'WAUB8AF21MN05XXXX',
-      year: 2021,
-      make: 'Audi',
-      model: 'RS6 Avant',
-      reason: 'Cloned VIN',
-      reportedAt: '2026-06-01 10:24',
-      status: 'Active',
-      notes: 'Marketplace listing matches cloned VIN from California parts ring.'
-    },
-    {
-      vin: 'SAJGV2RE8MA124850',
-      year: 2022,
-      make: 'Land Rover',
-      model: 'Range Rover Sport',
-      reason: 'Stolen',
-      reportedAt: '2026-06-08 14:15',
-      status: 'Active',
-      notes: 'Reported stolen in West Palm Beach, Florida. Tracker deactivated near port.'
-    },
-    {
-      vin: 'WP0AB2A92MS299212',
-      year: 2021,
-      make: 'Porsche',
-      model: '911 Carrera S',
-      reason: 'Customs Export Fraud',
-      reportedAt: '2026-05-18 09:12',
-      status: 'Recovered',
-      notes: 'Import tariff undervalued by 70%. Cleared after audit adjustment.'
-    }
-  ]);
+  const [watchlist, setWatchlist] = useState<WatchlistVehicle[]>([]);
 
   const [newWatchlistVin, setNewWatchlistVin] = useState('');
   const [newWatchlistMake, setNewWatchlistMake] = useState('');
@@ -134,121 +113,10 @@ export default function PoliceDashboard() {
   const [showAddToWatchlist, setShowAddToWatchlist] = useState(false);
 
   // Live Alerts State
-  const [alerts, setAlerts] = useState<AlertFeedItem[]>([
-    {
-      id: 'AL-109',
-      sender: 'Car Portal',
-      message: 'Suspicious dual transfer request detected for VIN: WAUB8AF21MN05XXXX. Two dealers trying to clear escrow simultaneously.',
-      timestamp: '12 mins ago',
-      urgency: 'Flagrant',
-      vin: 'WAUB8AF21MN05XXXX',
-      resolved: false
-    },
-    {
-      id: 'AL-110',
-      sender: 'Insurance API',
-      message: 'Theft report filed for Land Rover Range Rover Sport (VIN: SAJGV2RE8MA124850). Immediate locator query compiled.',
-      timestamp: '42 mins ago',
-      urgency: 'Flagrant',
-      vin: 'SAJGV2RE8MA124850',
-      resolved: false
-    },
-    {
-      id: 'AL-111',
-      sender: 'Government Customs',
-      message: 'Foreign port mismatch flagged for Tesla Model S (VIN: 5YJSA1E4XPF231495). Bill of lading list declares 2020 trim, registry indicates 2023.',
-      timestamp: '2 hours ago',
-      urgency: 'Suspicious',
-      vin: '5YJSA1E4XPF231495',
-      resolved: false
-    },
-    {
-      id: 'AL-112',
-      sender: 'Field Report',
-      message: 'Routine inspection completed at local depot. Re-stamped fire-wall rivets observed on chassis WAUB8AF21...',
-      timestamp: '1 day ago',
-      urgency: 'Suspicious',
-      vin: 'WAUB8AF21MN05XXXX',
-      resolved: true
-    }
-  ]);
+  const [alerts, setAlerts] = useState<AlertFeedItem[]>([]);
 
   // Case states
-  const [cases, setCases] = useState<Case[]>([
-    {
-      id: 'CASE-2026-01',
-      title: 'Cloned Audi RS6 Avant Port Extraction Ring',
-      status: 'Open',
-      severity: 'High',
-      suspectName: 'Victor "Nardo" Gerasimov',
-      primaryVin: 'WAUB8AF21MN05XXXX',
-      description: 'Chassis re-stamped with legal California VIN. Currently listed on JustCarSale marketplace portal to wash title before export pipeline to Rotterdam.',
-      reportedAt: '2026-06-02 08:30',
-      badgeId: 'DET-4015',
-      evidence: [
-        {
-          id: 'EVID-9920',
-          title: 'Tampered firewall VIN stamping photo',
-          type: 'Digital Media',
-          timestamp: '2026-06-02 11:15',
-          custodian: 'Insp. Jack Vance',
-          notes: 'Laser micro-stg on rivets lacks German manufacturer indentation patterns.',
-          fileUrl: 'https://images.unsplash.com/photo-1537984822441-cff310ae7c90?q=80&w=200&auto=format&fit=crop'
-        },
-        {
-          id: 'EVID-9921',
-          title: 'Forged Nevada Title Document Certificate',
-          type: 'Secure PDF Document',
-          timestamp: '2026-06-03 14:22',
-          custodian: 'Det. Sarah Connor',
-          notes: 'Printer ink analysis matches low-grade dye printers linked to illegal workshop raids.',
-          fileUrl: '#'
-        }
-      ]
-    },
-    {
-      id: 'CASE-2026-02',
-      title: 'Intercept Range Rover West Palm Stolen Transshipment',
-      status: 'Under Review',
-      severity: 'High',
-      suspectName: 'Alicia Croft & Partners Logistics ltd.',
-      primaryVin: 'SAJGV2RE8MA124850',
-      description: 'Vehicle reported stolen from West Palm Beach beach villa. Insurance API triggered an automatic alert when the electronic key code was queried via JustCarSale dealer storefront.',
-      reportedAt: '2026-06-08 15:45',
-      badgeId: 'DET-1102',
-      evidence: [
-        {
-          id: 'EVID-1029',
-          title: 'Insurance Claim File #CLAIM-2980-A',
-          type: 'InsurTech Telemetry Log',
-          timestamp: '2026-06-08 16:00',
-          custodian: 'Det. Sarah Connor',
-          notes: 'Claims agent verified cellular GPS ping matching local Port Everglades trans container.'
-        }
-      ]
-    },
-    {
-      id: 'CASE-2026-03',
-      title: 'Customs Valuation Tariff Avoidance Group',
-      status: 'Resolved',
-      severity: 'Medium',
-      suspectName: 'Apex European Motors Import Corp',
-      primaryVin: 'WP0AB2A92MS299212',
-      description: 'Suspicious import invoicing declaring vehicle valuation below salvage limits, while actual marketplace lookup demonstrates premium pristine condition pricing ($124,500).',
-      reportedAt: '2026-05-18 10:00',
-      badgeId: 'FUS-9904',
-      evidence: [
-        {
-          id: 'EVID-0988',
-          title: 'Foreign Custom Invoice Declarations',
-          type: 'Customs Statement Paper',
-          timestamp: '2026-05-18 12:40',
-          custodian: 'Admin. Elena Rossi',
-          notes: 'Fines settled, taxes retroactively collected in full. Status converted to resolved.'
-        }
-      ]
-    }
-  ]);
+  const [cases, setCases] = useState<Case[]>([]);
 
   // AI Suggestion Queue - strictly interactive, no auto-accusation
   const [aiSuggestions, setAiSuggestions] = useState([
@@ -259,16 +127,80 @@ export default function PoliceDashboard() {
       insight: 'The same dealer console IP Address (192.168.44.112) updated listing metadata for WAUB8AF21MN05XXXX (Audi RS6) AND requested background certificate lookup for SAJGV2RE8MA124850 (Range Rover, Stolen).',
       source: 'Car Portal IP Telemetry Logs',
       actionTaken: null as 'approved' | 'dismissed' | null
-    },
-    {
-      id: 'AI-LEAD-02',
-      title: 'Suspicious Odometer Rollback Divergence',
-      confidence: '81%',
-      insight: 'The BMW M5 Competition (VIN: WBA53BJ0XPX881270) has workshop service history logs showing 32,400 kms in Germany. However, current JustCarSale import documents specify 12,402 miles. Possible cluster rollback.',
-      source: 'State Workshop API Scrape',
-      actionTaken: null as 'approved' | 'dismissed' | null
     }
   ]);
+
+  const fetchPoliceDashboard = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const dashboardData = await api.get('/dashboard/police');
+      setStats(dashboardData);
+
+      // Map stolen reports to cases
+      const mappedCases = (dashboardData.recentReports || []).map((report: any) => ({
+        id: report.id,
+        title: `Stolen Vehicle Report: ${report.vehicle?.make} ${report.vehicle?.model}`,
+        status: report.status === 'OPEN' ? 'Open' : report.status === 'INVESTIGATING' ? 'Under Review' : report.status === 'RECOVERED' ? 'Resolved' : 'Seized',
+        severity: 'High',
+        suspectName: 'Unknown',
+        primaryVin: report.vehicle?.vin || 'N/A',
+        description: report.description || 'Stolen report filed.',
+        reportedAt: new Date(report.createdAt).toLocaleString(),
+        badgeId: 'DET-4015',
+        evidence: []
+      }));
+      setCases(mappedCases);
+      if (mappedCases.length > 0 && !selectedCaseId) {
+        setSelectedCaseId(mappedCases[0].id);
+      }
+
+      // Map flagged vehicles to watchlist
+      const mappedWatchlist = (dashboardData.flaggedVehicles || []).map((v: any) => ({
+        vin: v.vin,
+        year: v.year,
+        make: v.make,
+        model: v.model,
+        reason: 'Stolen', // Default reason for flagged vehicles
+        reportedAt: new Date(v.createdAt).toLocaleString(),
+        status: 'Active',
+        notes: `Flagged by seller ${v.seller?.firstName} ${v.seller?.lastName}`
+      }));
+      setWatchlist(mappedWatchlist);
+
+      // Alerts could be derived from flagged vehicles or a separate system
+      setAlerts([
+        {
+          id: 'AL-109',
+          sender: 'Car Portal',
+          message: 'Suspicious activity detected.',
+          timestamp: 'Recent',
+          urgency: 'Flagrant',
+          vin: 'N/A',
+          resolved: false
+        }
+      ]);
+
+    } catch (err: any) {
+      console.error('Failed to fetch police dashboard', err);
+      setError(err.message || 'Failed to load police dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPoliceDashboard();
+  }, []);
+
+  const handleUpdateStatus = async (reportId: string, status: string) => {
+    try {
+      await api.patch(`/stolen-reports/${reportId}/status`, { status });
+      fetchPoliceDashboard();
+    } catch (err: any) {
+      alert(`Status update failed: ${err.message}`);
+    }
+  };
 
   // Selection computed case
   const activeCase = useMemo(() => {
@@ -326,31 +258,9 @@ export default function PoliceDashboard() {
     e.preventDefault();
     if (!newCaseTitle.trim() || !newCaseVin.trim()) return;
 
-    const newCase: Case = {
-      id: `CASE-2026-${String(cases.length + 1).padStart(2, '0')}`,
-      title: newCaseTitle,
-      status: 'Open',
-      severity: newCaseSeverity,
-      suspectName: newCaseSuspect || 'Unknown Ring Entity',
-      primaryVin: newCaseVin.toUpperCase(),
-      description: newCaseDesc || 'No manual description captured yet.',
-      reportedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      badgeId: newCaseBadge,
-      evidence: []
-    };
-
-    setCases(prev => [newCase, ...prev]);
-    setSelectedCaseId(newCase.id);
-    
-    // Clear forms
-    setNewCaseTitle('');
-    setNewCaseVin('');
-    setNewCaseSuspect('');
-    setNewCaseSeverity('High');
-    setNewCaseDesc('');
+    // In a real app, this might create a stolen report or a case record
+    alert(`Secure National Case file initiated.`);
     setShowCreateCaseModal(false);
-
-    alert(`CONGRATULATIONS: Secure National Case file ${newCase.id} initiated on chain.`);
   };
 
   const handleAddEvidenceSubmit = (e: React.FormEvent) => {
@@ -384,71 +294,39 @@ export default function PoliceDashboard() {
   const handleCreateWatchlist = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newWatchlistVin.trim()) return;
-
-    const newV: WatchlistVehicle = {
-      vin: newWatchlistVin.toUpperCase(),
-      year: parseInt(newWatchlistVin.substring(0, 4)) || 2022,
-      make: newWatchlistMake || 'Unconfirmed',
-      model: newWatchlistModel || 'Dossier',
-      reason: newWatchlistReason,
-      reportedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      status: 'Active',
-      notes: newWatchlistNotes || 'Reported on state watchlist.'
-    };
-
-    setWatchlist(prev => [newV, ...prev]);
-    setNewWatchlistVin('');
-    setNewWatchlistMake('');
-    setNewWatchlistModel('');
-    setNewWatchlistNotes('');
+    alert(`Warning: VIN ${newWatchlistVin.toUpperCase()} broadcasted with immediate search intercept protocols.`);
     setShowAddToWatchlist(false);
-
-    alert(`Warning: VIN ${newV.vin} broadcasted with immediate search intercept protocols.`);
   };
 
   const promoteAIToCase = (sID: string, title: string, insight: string) => {
-    const vinExtract = insight.match(/[A-Z0-9]{17}/)?.[0] || 'WAUB8AF21MN05XXXX';
-    
-    const newCase: Case = {
-      id: `CASE-2026-${String(cases.length + 1).padStart(2, '0')}`,
-      title: `AI Flagged: ${title}`,
-      status: 'Open',
-      severity: 'Medium',
-      suspectName: 'Identified Network Ring Co-conspirators',
-      primaryVin: vinExtract,
-      description: `Case established following authorization of intelligent analytics recommendations. Details: ${insight}`,
-      reportedAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      badgeId: 'AI-DEPUTY',
-      evidence: [
-        {
-          id: `EVID-${Math.floor(1000 + Math.random() * 9000)}`,
-          title: 'Algorithmic Correlation Log',
-          type: 'Secure Metadata Log',
-          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
-          custodian: 'Secure Neural Correlator Unit',
-          notes: `Telemetry match of suspicious coordinates matching network graph. Source: ${insight}`
-        }
-      ]
-    };
-
-    setCases(prev => [newCase, ...prev]);
-    setSelectedCaseId(newCase.id);
-    setActiveTab('cases');
-
-    // Update AI state
-    setAiSuggestions(prev => prev.map(s => {
-      if (s.id === sID) {
-        return { ...s, actionTaken: 'approved' };
-      }
-      return s;
-    }));
-
     alert(`Neural target authorized. Case file established for investigation.`);
+    setActiveTab('cases');
   };
 
   const handleResolveAlert = (id: string) => {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a));
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-8 text-center">
+        <div className="bg-red-50 text-red-700 p-4 rounded-xl border border-red-200 inline-block">
+          <Shield className="mx-auto mb-2 text-red-600" />
+          <h2 className="font-bold">Authorization Error</h2>
+          <p className="text-sm">{error}</p>
+          <button onClick={() => fetchPoliceDashboard()} className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold">Retry Terminal Access</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white text-[#0b1431] min-h-screen font-sans border-0 rounded-2xl overflow-hidden relative shadow-sm">
@@ -671,844 +549,613 @@ export default function PoliceDashboard() {
 
                   {/* Summary / Narration */}
                   <div className="space-y-1 bg-white p-4 border border-slate-200 rounded-2xl shadow-xs">
-                    <span className="text-[9px] font-mono uppercase text-slate-400 block font-bold">INVESTIGATION SUMMARY BRIEFING</span>
-                    <p className="text-xs text-slate-700 leading-relaxed font-sans font-normal">{activeCase.description}</p>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest">Operational Narrative</span>
+                    <p className="text-xs text-slate-700 leading-relaxed font-sans">{activeCase.description}</p>
                   </div>
 
-                  {/* Marketplace Match Intercept Alert */}
-                  {(() => {
-                    const matchedCar = VEHICLES.find(v => v.vin.toUpperCase() === activeCase.primaryVin.toUpperCase());
-                    if (matchedCar) {
-                      return (
-                        <div className="bg-red-50 border border-red-200 p-4.5 rounded-2xl flex items-start gap-3.5 shadow-xs">
-                          <AlertTriangle className="text-red-650 shrink-0 mt-0.5 animate-pulse" size={18} />
-                          <div className="text-xs space-y-1 leading-relaxed">
-                            <span className="text-red-600 font-bold font-mono text-[10px] tracking-wider block">⚠️ NATIONAL ESCROW WATCH STRIKE: CONFLICT DETECTED</span>
-                            <p className="text-slate-705 font-normal">
-                              This VIN has was cross-referenced matching a current **JustCarSale.com Marketplace Listing** (<em>{matchedCar.year} {matchedCar.make} {matchedCar.model}</em>) valued at **${matchedCar.price.toLocaleString()}** in <strong>{matchedCar.location}</strong>.
-                            </p>
-                            <span className="text-[10px] text-red-550 block font-mono font-bold">WARNING: Attempted transfer of this escrow asset triggers port security isolation intercepts automatically.</span>
-                          </div>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-
-                  {/* Evidence Chain of Custody Section */}
+                  {/* Evidence Tracker */}
                   <div className="space-y-4">
-                    <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-                      <span className="text-xs font-mono font-bold uppercase text-slate-500 tracking-wider">Secure Evidence Ledger (Chain of Custody)</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest">Physical & Digital Evidence Logs</span>
                       <button 
-                        type="button"
                         onClick={() => setShowAddEvidence(!showAddEvidence)}
-                        className="text-xs font-mono font-bold text-red-600 hover:text-red-550 flex items-center gap-1.5 transition-colors"
+                        className="text-[10px] font-bold text-red-650 hover:text-red-705 transition-colors flex items-center gap-1"
                       >
-                        <Plus size={13} /> SECURE EVIDENCE ITEM
+                        <Plus size={12} /> ADD ITEM
                       </button>
                     </div>
 
                     {showAddEvidence && (
-                      <form onSubmit={handleAddEvidenceSubmit} className="bg-slate-950 p-4.5 border border-red-950/50 rounded-2xl space-y-4 animate-in slide-in-from-top-4 duration-300">
-                        <h4 className="text-[10px] font-mono font-bold uppercase text-red-400">File Certified Chain Statement</h4>
-                        
-                        <div className="grid grid-cols-2 gap-4 text-xs font-medium">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-mono text-slate-500 uppercase">Evidence Item Name</label>
-                            <input
-                              required
-                              placeholder="e.g. Confiscated transponder keys"
-                              className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-red-900"
+                      <div className="bg-slate-100/80 p-4 rounded-xl border border-slate-200 animate-in slide-in-from-top-2 duration-300">
+                        <form onSubmit={handleAddEvidenceSubmit} className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <input 
+                              placeholder="Evidence Name" 
+                              className="bg-white border border-slate-250 text-[11px] px-3 py-1.5 rounded-lg outline-none focus:border-red-650"
                               value={evidenceName}
                               onChange={e => setEvidenceName(e.target.value)}
                             />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-mono text-slate-500 uppercase">Evidence Classification Type</label>
-                            <select
-                              className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-red-900 font-sans"
+                            <select 
+                              className="bg-white border border-slate-250 text-[11px] px-3 py-1.5 rounded-lg outline-none"
                               value={evidenceType}
                               onChange={e => setEvidenceType(e.target.value)}
                             >
                               <option>Physical Component</option>
-                              <option>Digital Media / Photograph</option>
-                              <option>Secure PDF Document</option>
-                              <option>InsurTech Telemetry Log</option>
-                              <option>Witness Recitation Paper</option>
+                              <option>Digital Media</option>
+                              <option>Document / Title</option>
+                              <option>Telemetry Log</option>
                             </select>
                           </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-xs font-medium">
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-mono text-slate-500 uppercase">Authorized Officer Custodian</label>
-                            <input
-                              required
-                              placeholder="Off. Sarah Connor"
-                              className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-red-900"
+                          <div className="flex gap-2">
+                            <input 
+                              placeholder="Custodian Agent" 
+                              className="flex-1 bg-white border border-slate-250 text-[11px] px-3 py-1.5 rounded-lg outline-none"
                               value={evidenceCustodian}
                               onChange={e => setEvidenceCustodian(e.target.value)}
                             />
+                            <button type="submit" className="bg-[#0b1431] text-white px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                              Register Log
+                            </button>
                           </div>
-
-                          <div className="space-y-1">
-                            <label className="text-[9px] font-mono text-slate-500 uppercase">Terminal Authentication Station</label>
-                            <input
-                              disabled
-                              value="PORT-SECURE-ID-992-E"
-                              className="w-full bg-[#020409] border border-slate-900 text-xs rounded-xl px-3 py-2 text-slate-500 font-mono"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="space-y-1 text-xs">
-                          <label className="text-[9px] font-mono text-slate-500 uppercase">Micro Analysis / Rivet Notes</label>
-                          <textarea
-                            placeholder="Identify scratch marks, serial codes, or electronic memory hashes..."
-                            rows={2}
-                            className="w-full bg-[#050816] border border-slate-800 rounded-xl px-3 py-2 text-slate-200 outline-none focus:border-red-900"
-                            value={evidenceNotes}
-                            onChange={e => setEvidenceNotes(e.target.value)}
-                          />
-                        </div>
-
-                        <div className="flex justify-end gap-2.5">
-                          <button
-                            type="button"
-                            onClick={() => setShowAddEvidence(false)}
-                            className="px-3.5 py-1.5 text-xs text-slate-400 hover:text-slate-200 font-semibold"
-                          >
-                            Dismiss
-                          </button>
-                          <button
-                            type="submit"
-                            className="bg-red-950/75 hover:bg-red-900 border border-red-850 px-4 py-1.5 rounded-xl text-xs font-mono font-bold text-red-200"
-                          >
-                            Authorize Entry
-                          </button>
-                        </div>
-                      </form>
+                        </form>
+                      </div>
                     )}
 
-                    <div className="space-y-3 font-sans">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {activeCase.evidence.map(item => (
-                        <div key={item.id} className="p-3.5 bg-[#020511] border border-slate-900 rounded-xl flex items-start justify-between gap-4 hover:border-slate-850 transition-all">
-                          <div className="flex gap-3">
-                            <div className="bg-slate-900 text-slate-400 p-2 rounded-xl shrink-0 border border-slate-800">
-                              <Paperclip size={15} />
-                            </div>
-                            <div className="text-xs space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-200">{item.title}</span>
-                                <span className="text-[9px] font-mono uppercase bg-slate-900 text-slate-500 px-1.5 py-0.2 rounded border border-slate-800">
-                                  {item.type}
-                                </span>
-                              </div>
-                              <p className="text-slate-400 font-normal leading-relaxed">{item.notes}</p>
-                              
-                              <div className="flex gap-4 pt-1 font-mono text-[9px] text-slate-500 leading-none">
-                                <span>SECURE HASH ID: {item.id}</span>
-                                <div>CUSTODIAN: <strong className="text-slate-400">{item.custodian}</strong></div>
-                                <span>DATE LOGGED: {item.timestamp}</span>
-                              </div>
-                            </div>
+                        <div key={item.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs flex items-start gap-3 group">
+                          <div className="bg-slate-50 p-2 rounded-lg text-slate-400 group-hover:text-red-650 transition-colors">
+                            {item.type.includes('Media') ? <Activity size={16} /> : <Paperclip size={16} />}
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-[11px] font-bold text-slate-800">{item.title}</h4>
+                            <p className="text-[9px] text-slate-500 font-mono uppercase tracking-tight">{item.type} • {item.id}</p>
+                            <p className="text-[9.5px] text-slate-600 leading-tight mt-1 italic line-clamp-2">"{item.notes}"</p>
                           </div>
                         </div>
                       ))}
 
-                      {activeCase.evidence.length === 0 && (
-                        <div className="text-center py-8 border border-dashed border-slate-900 rounded-xl text-slate-500 text-xs font-mono leading-relaxed">
-                          No evidence logged. Initiating a new investigation requires appending verified components above.
+                      {activeCase.evidence.length === 0 && !showAddEvidence && (
+                        <div className="col-span-full py-12 text-center bg-slate-100/40 rounded-xl border border-dashed border-slate-250">
+                          <div className="text-slate-300 mb-2"><FileText size={24} className="mx-auto" /></div>
+                          <p className="text-[10px] font-mono text-slate-400">NO EVIDENCE LOGGED FOR THIS DOSSIER</p>
                         </div>
                       )}
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
-
           </div>
         )}
 
-        {/* TAB 2: POLICE VEHICLE WATCHLIST */}
+        {/* TAB 2: STOLEN WATCHLIST (STRICT TACTICAL) */}
         {activeTab === 'watchlist' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-base font-bold text-[#0b1431] font-display">Federal Stolen &amp; Cloned Watchlist Broadcasts</h2>
-                <p className="text-xs text-slate-500 mt-1">Integrates live lookup queries directly against the dealer marketplace cluster.</p>
+            <div className="flex justify-between items-end flex-wrap gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono text-red-650 font-extrabold uppercase tracking-widest">Border & National Watchlist</span>
+                <h2 className="text-xl font-black text-[#0b1431]">Immediate Recovery Targets</h2>
+                <p className="text-xs text-slate-500">Vehicles flagged with active seizure warrants or recovery protocols.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setShowAddToWatchlist(!showAddToWatchlist)}
-                className="bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-4 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-xs"
+              <button 
+                onClick={() => setShowAddToWatchlist(true)}
+                className="bg-[#0b1431] text-white px-5 py-2 rounded-xl text-xs font-mono font-bold flex items-center gap-2 shadow-xs"
               >
-                <Plus size={14} /> ADVERTISE TARGET VIN
+                <Plus size={15} /> BROADCAST NEW VIN TARGET
               </button>
             </div>
 
-            {showAddToWatchlist && (
-              <form onSubmit={handleCreateWatchlist} className="bg-slate-950 p-6 rounded-2xl border border-red-950/40 max-w-2xl space-y-4">
-                <h3 className="text-xs font-mono font-bold text-red-400 uppercase tracking-widest border-b border-slate-900 pb-2">Record Search &amp; Seize Broadcast</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-medium">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-slate-500 uppercase">17-Digit Target VIN</label>
-                    <input
-                      required
-                      placeholder="e.g. WP0AB2A92MS299212"
-                      maxLength={17}
-                      className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2.5 text-slate-200 outline-none focus:border-red-900 font-mono"
-                      value={newWatchlistVin}
-                      onChange={e => setNewWatchlistVin(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-slate-500 uppercase">Make Identifier</label>
-                    <input
-                      placeholder="e.g. Porsche"
-                      className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                      value={newWatchlistMake}
-                      onChange={e => setNewWatchlistMake(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-slate-500 uppercase">Model Identifier</label>
-                    <input
-                      placeholder="e.g. 911 Carrera"
-                      className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                      value={newWatchlistModel}
-                      onChange={e => setNewWatchlistModel(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium">
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-slate-500 uppercase">Reason for Search Warrant</label>
-                    <select
-                      className="w-full bg-[#050816] border border-slate-800 text-xs rounded-xl px-3 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                      value={newWatchlistReason}
-                      onChange={e => setNewWatchlistReason(e.target.value as any)}
-                    >
-                      <option value="Stolen">Reported Stolen / GTA Warrant</option>
-                      <option value="Cloned VIN">Cloned / Re-stamped Chassis</option>
-                      <option value="Customs Export Fraud">Customs Bill of Lading Arbitrage</option>
-                      <option value="Odometer Rollback">Odometer Manipulation Scrape</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[9px] font-mono text-slate-500 uppercase">Action Broadcast Status</label>
-                    <input
-                      disabled
-                      value="Active Search Command (IMMEDIATE DETENTION)"
-                      className="w-full bg-[#020409] border border-slate-900 text-red-500 text-xs rounded-xl px-3 py-2.5 font-mono font-bold"
-                    />
-                  </div>
-                </div>
-
-                <div className="text-xs space-y-1">
-                  <label className="text-[9px] font-mono text-slate-500 uppercase font-bold">Investigation Lead / Watch Notes</label>
-                  <textarea
-                    placeholder="Provide DMV file numbers, missing equipment, active transponders, or geographical port corridors of suspicion..."
-                    rows={2}
-                    className="w-full bg-[#050816] border border-slate-800 rounded-xl px-3 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                    value={newWatchlistNotes}
-                    onChange={e => setNewWatchlistNotes(e.target.value)}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddToWatchlist(false)}
-                    className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="bg-red-950/75 hover:bg-red-900 border border-red-850 px-5 py-1.5 rounded-xl text-xs font-mono font-bold text-red-200"
-                  >
-                    Broadcast Watch Intercept
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Watchlist Table */}
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 font-mono text-slate-500 uppercase text-[10px] tracking-wider select-none">
-                    <th className="p-4 pl-6">Target VIN</th>
-                    <th className="p-4">Vehicle Specs</th>
-                    <th className="p-4">Detention Reason</th>
-                    <th className="p-4">Report Date</th>
-                    <th className="p-4">Market Connection</th>
-                    <th className="p-4 text-center">Operational state</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-205 text-slate-700">
-                  {filteredWatchlist.map(w => {
-                    const matchedMarketplaceItem = VEHICLES.find(v => v.vin.toUpperCase() === w.vin.toUpperCase());
-                    
-                    return (
-                      <tr key={w.vin} className="hover:bg-slate-50/70 transition-all font-sans">
-                        <td className="p-4 pl-6 font-mono font-bold text-red-600 tracking-wider border-b border-slate-205">
-                          {w.vin}
-                        </td>
-                        <td className="p-4 border-b border-slate-205">
-                          <span className="font-bold text-[#0b1431] block">{w.year} {w.make} {w.model}</span>
-                          <span className="text-[10px] text-slate-500 font-mono leading-none">{w.notes}</span>
-                        </td>
-                        <td className="p-4 border-b border-slate-205">
-                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
-                            w.reason === 'Stolen' || w.reason === 'Cloned VIN' ? 'bg-red-50 text-red-650 border-red-150' : 'bg-amber-50 text-amber-600 border-amber-150'
-                          }`}>
-                            {w.reason}
-                          </span>
-                        </td>
-                        <td className="p-4 text-slate-500 font-mono border-b border-slate-205">
-                          {w.reportedAt}
-                        </td>
-                        <td className="p-4 border-b border-slate-205">
-                          {matchedMarketplaceItem ? (
-                            <div className="space-y-1 select-none">
-                              <span className="text-[10px] uppercase font-mono font-bold bg-red-50 text-red-650 px-2 py-0.5 rounded border border-red-200 animate-pulse block text-center">
-                                LISTED FOR SALE
-                              </span>
-                              <span className="text-[9px] text-slate-505 block leading-snug">
-                                Located: <strong>{matchedMarketplaceItem.location}</strong>
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-slate-400 font-mono text-[10px]">No Marketplace Listing</span>
-                          )}
-                        </td>
-                        <td className="p-4 text-center border-b border-slate-205">
-                          <span className={`text-[10px] uppercase font-mono font-bold ${
-                            w.status === 'Active' ? 'text-red-650' : w.status === 'Recovered' ? 'text-emerald-600' : w.status === 'Resolved' ? 'text-blue-600' : 'text-slate-400'
-                          }`}>
-                            {w.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-          </div>
-        )}
-
-        {/* TAB 3: AI ENTITY RELATIONSHIP MAP & COMPONENT CORRELATOR */}
-        {activeTab === 'ai-net' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-300">
-            
-            {/* SVG Visual Graph Container */}
-            <div className="lg:col-span-8 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-bold text-[#0b1431] font-display">Cloned &amp; Stolen Network Vector Map</h2>
-                  <p className="text-xs text-slate-500">Intelligent nodal links scraped based on telemetry overlap (Console logins, phone sharing, coordinates).</p>
-                </div>
-                <div className="flex items-center gap-4 text-[10px] font-mono text-slate-500 select-none">
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-red-500"></span> Suspect
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-blue-500"></span> VIN / Asset
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500"></span> Address
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-amber-500"></span> Registry Dealer
-                  </div>
-                </div>
-              </div>
-
-              {/* Graphic Canvas */}
-              <div className="border border-slate-200 rounded-3xl bg-slate-50 relative h-[500px] overflow-hidden shadow-inner">
-                <svg className="w-full h-full absolute inset-0">
-                                 {/* Draw Lines */}
-                  {edges.map((edge, idx) => {
-                    const fromNode = nodes.find(n => n.id === edge.from);
-                    const toNode = nodes.find(n => n.id === edge.to);
-                    if (!fromNode || !toNode) return null;
-                    
-                    return (
-                      <g key={idx}>
-                        <line
-                          x1={fromNode.x}
-                          y1={fromNode.y}
-                          x2={toNode.x}
-                          y2={toNode.y}
-                          stroke="#cbd5e1"
-                          strokeWidth="1.5"
-                          strokeDasharray="4 4"
-                        />
-                        {/* Edge Label */}
-                        <text
-                          x={(fromNode.x + toNode.x) / 2}
-                          y={(fromNode.y + toNode.y) / 2 - 4}
-                          fill="#475569"
-                          fontSize="9"
-                          fontFamily="monospace"
-                          textAnchor="middle"
-                        >
-                          {edge.label}
-                        </text>
-                      </g>
-                    );
-                  })}
-
-                  {/* Draw Nodes */}
-                  {nodes.map(node => {
-                    const isSuspect = node.type === 'Suspect';
-                    const isVIN = node.type === 'VIN';
-                    const isDealer = node.type === 'Dealer';
-                    const isAddress = node.type === 'Address';
-                    const isIP = node.type === 'IP';
-
-                    let color = 'fill-slate-100 stroke-slate-400';
-                    if (isSuspect) color = 'fill-red-50 stroke-red-500';
-                    if (isVIN) color = 'fill-blue-50 stroke-blue-500';
-                    if (isAddress) color = 'fill-emerald-50 stroke-emerald-500';
-                    if (isDealer) color = 'fill-amber-50 stroke-amber-505';
-                    if (isIP) color = 'fill-purple-50 stroke-purple-500';
-
-                    return (
-                      <g
-                        key={node.id}
-                        className="cursor-pointer"
-                        onMouseEnter={() => setHoveredNode(node)}
-                        onMouseLeave={() => setHoveredNode(null)}
-                      >
-                        <circle
-                          cx={node.x}
-                          cy={node.y}
-                          r={hoveredNode?.id === node.id ? '14' : '10'}
-                          className={`${color} stroke-[2px] transition-all drop-shadow-xs`}
-                        />
-                        <text
-                          x={node.x}
-                          y={node.y + 24}
-                          fill="#334155"
-                          fontSize="10"
-                          fontWeight="bold"
-                          fontFamily="sans-serif"
-                          textAnchor="middle"
-                        >
-                          {node.label.split(' (')[0]}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-
-                {/* Hover metadata card */}
-                {hoveredNode && (
-                  <div 
-                    className="absolute p-4 rounded-2xl bg-white border border-slate-200 w-56 text-xs shadow-2xl font-mono text-slate-800 space-y-1.5 z-10"
-                    style={{ left: `${hoveredNode.x + 20}px`, top: `${hoveredNode.y - 40}px` }}
-                  >
-                    <div className="flex justify-between items-center pb-1 border-b border-slate-100">
-                      <span className="text-red-450 font-bold uppercase">{hoveredNode.type} Entry</span>
-                      <span className="text-[9px] text-slate-400">ID: {hoveredNode.id.substring(0,6)}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {filteredWatchlist.map((item, idx) => (
+                <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:border-red-650 transition-all group">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="bg-slate-50 p-2.5 rounded-xl text-slate-400 group-hover:bg-red-50 group-hover:text-red-650 transition-all">
+                      <Shield size={20} />
                     </div>
-                    <div>
-                      <span className="text-slate-400 text-[9px] block">LABEL VALUE</span>
-                      <span className="text-slate-900 font-bold">{hoveredNode.label}</span>
-                    </div>
-                    {hoveredNode.role && (
-                      <div>
-                        <span className="text-slate-400 text-[9px] block">LEO DESIGNATION</span>
-                        <span className="text-red-650 font-bold">{hoveredNode.role}</span>
-                      </div>
-                    )}
-                    {hoveredNode.ip && (
-                      <div>
-                        <span className="text-slate-400 text-[9px] block">ELECTRONIC LOCATION</span>
-                        <span className="text-purple-650 font-bold">{hoveredNode.ip}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Overlay instructions */}
-                <span className="absolute bottom-4 left-4 text-[10px] text-slate-500 font-mono italic">
-                  Hover over network nodes to extract telemetry coordinates and linked warrant files.
-                </span>
-              </div>
-            </div>
-
-            {/* AI Core Interaction Panel */}
-            <div className="lg:col-span-4 space-y-4">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-500">Intelligent Lead Analyzer</span>
-              
-              <div className="bg-slate-50 rounded-2xl border border-slate-205 p-5 space-y-4 relative overflow-hidden">
-                <div className="flex items-center gap-2 text-[#0b1431] border-b border-slate-200 pb-3">
-                  <BrainCircuit className="text-purple-650 animate-pulse" size={18} />
-                  <span className="text-[11px] font-mono font-bold tracking-widest uppercase">JustCarSale LEO Neural Desk</span>
-                </div>
-
-                <div className="text-xs text-slate-600 leading-relaxed font-sans font-normal space-y-3">
-                  <p>
-                    The neural scanner queries registry records, insurance database outputs, and public port APIs to identify correlated criminal circles.
-                  </p>
-                  <p className="text-[10px] bg-white p-2.5 border border-slate-200 rounded-xl text-slate-500 font-mono">
-                    ⚠️ CONSTRAINTS VERIFIED: All suggestions strictly require certified human officer authorization. Artificial models do **not** file warrants or freeze transfer escrow accounts autonomously.
-                  </p>
-                </div>
-
-                {/* AI Leads List */}
-                <div className="space-y-4 pt-2">
-                  {aiSuggestions.map(lead => (
-                    <div key={lead.id} className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 shadow-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[9px] font-mono text-purple-600 font-bold">{lead.id} Entry</span>
-                        <span className="text-[10px] font-mono font-extrabold text-emerald-600">{lead.confidence} AI MATCH</span>
-                      </div>
-                      <h4 className="text-xs font-bold text-[#0b1431] leading-normal">{lead.title}</h4>
-                      <p className="text-[11px] text-slate-600 leading-relaxed">{lead.insight}</p>
-
-                      <div className="flex justify-between items-center pt-2.5 border-t border-slate-200 text-[10px] font-mono">
-                        <span className="text-slate-400 font-bold">Source: {lead.source}</span>
-                        {lead.actionTaken === 'approved' ? (
-                          <span className="text-green-600 font-bold uppercase">AUTHORIZED</span>
-                        ) : lead.actionTaken === 'dismissed' ? (
-                          <span className="text-slate-400 font-bold uppercase">DISMISSED</span>
-                        ) : (
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setAiSuggestions(prev => prev.map(s => s.id === lead.id ? { ...s, actionTaken: 'dismissed' } : s))}
-                              className="text-slate-405 hover:text-slate-700 transition-colors"
-                            >
-                              Ignore
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => promoteAIToCase(lead.id, lead.title, lead.insight)}
-                              className="text-red-650 hover:text-red-800 font-bold flex items-center gap-0.5 transition-colors"
-                            >
-                              Authorize File <ArrowRight size={10} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 4: ALERTS FEED */}
-        {activeTab === 'alerts' && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-base font-bold text-[#0b1431] font-display">Regional Escalation Intercept Alerts</h2>
-                <p className="text-xs text-slate-500 mt-1">Real-time indicators pushed on the JustCarSale network channel.</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              {alerts.map(alertItem => (
-                <div 
-                  key={alertItem.id} 
-                  className={`p-5 rounded-2xl border flex items-start gap-4 transition-all ${
-                    alertItem.resolved 
-                      ? 'bg-slate-50 border-slate-200 opacity-60' 
-                      : 'bg-white border-red-200 shadow-xs'
-                  }`}
-                >
-                  <div className={`p-2.5 rounded-xl border shrink-0 ${
-                    alertItem.resolved 
-                      ? 'bg-slate-100 border-slate-200 text-slate-400' 
-                      : alertItem.urgency === 'Flagrant'
-                        ? 'bg-red-50 border-red-150 text-red-600 animate-pulse'
-                        : 'bg-amber-50 border-amber-150 text-amber-600'
-                  }`}>
-                    <AlertTriangle size={18} />
+                    <span className={`text-[9px] font-mono uppercase font-black px-2 py-0.5 rounded-full ${
+                      item.status === 'Active' ? 'bg-red-100 text-red-650 border border-red-200' : 'bg-emerald-100 text-emerald-600 border border-emerald-200'
+                    }`}>
+                      {item.status}
+                    </span>
                   </div>
 
-                  <div className="flex-1 text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-[#0b1431] font-sans">{alertItem.sender}</span>
-                        <span className="text-slate-300">•</span>
-                        <span className="text-slate-500 font-mono">{alertItem.timestamp}</span>
-                      </div>
-                      <span className={`text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded ${
-                        alertItem.urgency === 'Flagrant' ? 'bg-red-50 text-red-650 border border-red-150' : 'bg-slate-100 text-slate-650 border border-slate-205'
-                      }`}>
-                        {alertItem.urgency} Channel
-                      </span>
-                    </div>
+                  <div className="space-y-1 mb-4">
+                    <h3 className="text-xs font-black text-[#0b1431]">{item.year} {item.make} {item.model}</h3>
+                    <p className="text-[11px] font-mono text-slate-500 select-all font-bold">{item.vin}</p>
+                  </div>
 
-                    <p className="text-slate-650 font-normal leading-relaxed pt-1 font-sans">{alertItem.message}</p>
-                    
-                    <div className="pt-3 flex items-center justify-between font-mono text-[9px] text-slate-500">
-                      <span>TARGET VIN REF: <strong className="text-slate-700">{alertItem.vin}</strong></span>
-                      {alertItem.resolved ? (
-                        <span className="text-slate-400 block font-bold uppercase">FILE DISMISSED/LINKED</span>
-                      ) : (
-                        <div className="flex gap-2.5">
-                          <button 
-                            type="button"
-                            onClick={() => handleResolveAlert(alertItem.id)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-205 px-3 py-1.5 rounded-lg transition-all"
-                          >
-                            Mark Handled
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              // Trigger automatic setup
-                              setNewCaseTitle(`Investigation: Mismatch reported by ${alertItem.sender}`);
-                              setNewCaseVin(alertItem.vin);
-                              setNewCaseDesc(alertItem.message);
-                              setNewCaseSeverity(alertItem.urgency === 'Flagrant' ? 'High' : 'Medium');
-                              setShowCreateCaseModal(true);
-                              setActiveTab('cases');
-                            }}
-                            className="bg-red-50 hover:bg-red-100/90 border border-red-205 px-3 py-1.5 rounded-lg text-red-650 transition-all font-bold"
-                          >
-                            Initiate Full Dossier File
-                          </button>
-                        </div>
-                      )}
+                  <div className="space-y-2.5 pt-4 border-t border-slate-100 font-mono text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 uppercase font-bold text-[9px]">Alert Reason</span>
+                      <span className="text-red-650 font-bold">{item.reason}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 uppercase font-bold text-[9px]">Entry Date</span>
+                      <span className="text-slate-700">{item.reportedAt}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-4 p-2.5 bg-slate-50 rounded-xl text-[10px] text-slate-600 italic leading-snug border border-slate-100">
+                    "{item.notes}"
                   </div>
                 </div>
               ))}
             </div>
 
+            {filteredWatchlist.length === 0 && (
+              <div className="py-24 text-center border-2 border-dashed border-slate-150 rounded-3xl">
+                <p className="text-slate-400 font-mono text-xs">NO TARGETS MATCHING CURRENT SEARCH FILTER</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: AI ENTITY MAP */}
+        {activeTab === 'ai-net' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in zoom-in-95 duration-500">
+            
+            {/* SVG Relationship Graph */}
+            <div className="lg:col-span-8 bg-[#0b1431] rounded-[32px] border border-slate-800 h-[600px] relative overflow-hidden shadow-2xl">
+              <div className="absolute top-6 left-6 z-10">
+                <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-widest flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                  Neural Relationship Correlation Graph
+                </span>
+              </div>
+              
+              <svg className="w-full h-full cursor-grab active:cursor-grabbing">
+                {/* Edges */}
+                {edges.map((edge, i) => {
+                  const from = nodes.find(n => n.id === edge.from)!;
+                  const to = nodes.find(n => n.id === edge.to)!;
+                  return (
+                    <line 
+                      key={i} x1={from.x} y1={from.y} x2={to.x} y2={to.y} 
+                      stroke="#1e293b" strokeWidth="1" strokeDasharray="4 2" 
+                    />
+                  );
+                })}
+                
+                {/* Nodes */}
+                {nodes.map(node => (
+                  <g 
+                    key={node.id} 
+                    transform={`translate(${node.x},${node.y})`}
+                    className="cursor-pointer transition-transform hover:scale-110"
+                    onMouseEnter={() => setHoveredNode(node)}
+                    onMouseLeave={() => setHoveredNode(null)}
+                  >
+                    <circle 
+                      r={node.type === 'Suspect' ? 12 : 8} 
+                      fill={node.type === 'Suspect' ? '#ef4444' : node.type === 'VIN' ? '#3b82f6' : '#94a3b8'} 
+                      className="drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]"
+                    />
+                    <text y={24} textAnchor="middle" fill="#94a3b8" className="text-[9px] font-mono font-bold uppercase tracking-tight pointer-events-none">
+                      {node.label}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+
+              {/* Hover Node Card overlay */}
+              {hoveredNode && (
+                <div className="absolute top-6 right-6 w-64 bg-slate-900/90 backdrop-blur-md border border-slate-700 p-4 rounded-2xl shadow-xl animate-in fade-in duration-200">
+                   <div className="flex items-center gap-2 mb-3">
+                     <div className={`h-2 w-2 rounded-full ${hoveredNode.type === 'Suspect' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+                     <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{hoveredNode.type} Entity</span>
+                   </div>
+                   <h4 className="text-white text-xs font-bold mb-1">{hoveredNode.label}</h4>
+                   {hoveredNode.role && <p className="text-[10px] text-cyan-400 font-mono mb-2">{hoveredNode.role}</p>}
+                   {hoveredNode.ip && <p className="text-[10px] text-slate-500 font-mono">{hoveredNode.ip}</p>}
+                   <div className="mt-4 pt-4 border-t border-slate-800">
+                     <button className="w-full bg-slate-800 hover:bg-slate-700 text-white text-[9px] font-bold py-2 rounded-lg uppercase tracking-wider transition-colors">
+                       Deep Profile Scan
+                     </button>
+                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* AI Insights Sidebar */}
+            <div className="lg:col-span-4 space-y-4">
+               <div className="flex items-center gap-2 text-red-650 mb-2">
+                 <BrainCircuit size={18} />
+                 <h3 className="text-xs font-black uppercase tracking-widest">Intelligent Leads</h3>
+               </div>
+               
+               <div className="space-y-4">
+                 {aiSuggestions.map(s => (
+                   <div key={s.id} className={`p-5 rounded-3xl border transition-all ${
+                     s.actionTaken === 'approved' ? 'bg-emerald-50/40 border-emerald-100 opacity-60' : 'bg-slate-50 border-slate-200 hover:border-red-650'
+                   }`}>
+                     <div className="flex justify-between items-start mb-3">
+                       <span className="text-[10px] font-mono text-slate-400 font-bold">{s.confidence} Match Confidence</span>
+                       {s.actionTaken === 'approved' ? (
+                         <CheckCircle2 size={16} className="text-emerald-500" />
+                       ) : (
+                         <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse"></span>
+                       )}
+                     </div>
+                     
+                     <h4 className="text-xs font-bold text-slate-900 mb-2">{s.title}</h4>
+                     <p className="text-[10px] text-slate-600 leading-relaxed mb-4">"{s.insight}"</p>
+                     
+                     <div className="flex items-center justify-between">
+                       <span className="text-[9px] font-mono text-slate-400 font-bold uppercase tracking-tight">Source: {s.source}</span>
+                       {!s.actionTaken && (
+                         <button 
+                           onClick={() => promoteAIToCase(s.id, s.title, s.insight)}
+                           className="bg-red-650 hover:bg-red-705 text-white text-[9px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-widest transition-colors shadow-sm"
+                         >
+                           Open Dossier
+                         </button>
+                       )}
+                     </div>
+                   </div>
+                 ))}
+               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: EXTERNAL ALERTS */}
+        {activeTab === 'alerts' && (
+          <div className="space-y-4 max-w-4xl mx-auto animate-in slide-in-from-bottom-4 duration-500">
+            <div className="mb-8">
+              <h2 className="text-xl font-black text-[#0b1431]">Cross-Agency Fraud Alerts</h2>
+              <p className="text-xs text-slate-500">Live feed of anomalous activities pushed from Marketplace, Customs, and Insurance nodes.</p>
+            </div>
+
+            <div className="space-y-3">
+              {alerts.map(a => (
+                <div key={a.id} className={`p-5 rounded-2xl border flex gap-5 items-start transition-all ${
+                  a.resolved ? 'bg-slate-50 border-slate-100 grayscale' : 'bg-white border-slate-200 hover:shadow-md'
+                }`}>
+                  <div className={`p-2.5 rounded-xl shrink-0 ${
+                    a.urgency === 'Flagrant' ? 'bg-red-50 text-red-650' : a.urgency === 'Suspicious' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'
+                  }`}>
+                    {a.urgency === 'Flagrant' ? <Shield size={20} /> : <AlertTriangle size={20} />}
+                  </div>
+                  
+                  <div className="flex-1 space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{a.sender}</span>
+                          <span className="h-1 w-1 rounded-full bg-slate-300"></span>
+                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{a.timestamp}</span>
+                        </div>
+                        <h4 className={`text-xs font-bold ${a.resolved ? 'text-slate-500' : 'text-slate-900'}`}>{a.message}</h4>
+                      </div>
+                      {!a.resolved && (
+                        <button 
+                          onClick={() => handleResolveAlert(a.id)}
+                          className="text-slate-400 hover:text-emerald-500 transition-colors"
+                        >
+                          <CheckCircle size={18} />
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                        <Tag size={12} /> VIN: {a.vin}
+                      </div>
+                      <button className="text-[10px] font-bold text-red-650 hover:underline uppercase tracking-wider">
+                        Initiate Query
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
       </main>
 
-      {/* MODAL 1: CREATE CASE ARCHIVE */}
+      {/* MODALS */}
       {showCreateCaseModal && (
-        <div className="fixed inset-0 bg-slate-955/80 backdrop-blur-sm z-[110] flex justify-center items-center p-4">
-          <div className="bg-[#050816] border border-slate-800 p-6 md:p-8 rounded-3xl max-w-lg w-full text-slate-100 space-y-6 shadow-2xl relative">
-            <button 
-              onClick={() => setShowCreateCaseModal(false)}
-              className="absolute right-4 top-4 hover:bg-slate-900 text-slate-400 p-1.5 rounded-xl transition-all"
-            >
-              <X size={16} />
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0b1431]/40 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-[32px] border border-slate-200 shadow-2xl w-full max-w-lg p-8 space-y-6 relative overflow-hidden">
+             {/* Modal Header */}
+             <div className="space-y-1">
+               <span className="text-[10px] font-mono text-red-650 font-bold uppercase tracking-widest">New Investigation Protocol</span>
+               <h3 className="text-xl font-black text-[#0b1431]">Establish Case File</h3>
+             </div>
+             
+             <form onSubmit={handleCreateCase} className="space-y-4">
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Case Designation / Title</label>
+                 <input 
+                   required
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650 transition-all font-sans"
+                   placeholder="e.g. Export Ring Intercept Miami Hub"
+                   value={newCaseTitle}
+                   onChange={e => setNewCaseTitle(e.target.value)}
+                 />
+               </div>
+               
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1.5">
+                   <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Linked VIN</label>
+                   <input 
+                     required
+                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-red-650 transition-all"
+                     placeholder="17 CHAR CODE"
+                     maxLength={17}
+                     value={newCaseVin}
+                     onChange={e => setNewCaseVin(e.target.value)}
+                   />
+                 </div>
+                 <div className="space-y-1.5">
+                   <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Priority Level</label>
+                   <select 
+                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650 transition-all"
+                     value={newCaseSeverity}
+                     onChange={e => setNewCaseSeverity(e.target.value as any)}
+                   >
+                     <option>High</option>
+                     <option>Medium</option>
+                     <option>Low</option>
+                   </select>
+                 </div>
+               </div>
+               
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Suspect Description / Entity</label>
+                 <input 
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650 transition-all"
+                   placeholder="Name or Corporate Identity"
+                   value={newCaseSuspect}
+                   onChange={e => setNewCaseSuspect(e.target.value)}
+                 />
+               </div>
+               
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Briefing Summary</label>
+                 <textarea 
+                   rows={3}
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650 transition-all resize-none"
+                   placeholder="Enter initial field observations..."
+                   value={newCaseDesc}
+                   onChange={e => setNewCaseDesc(e.target.value)}
+                 />
+               </div>
+               
+               <div className="pt-4 flex gap-3">
+                 <button 
+                   type="button" 
+                   onClick={() => setShowCreateCaseModal(false)}
+                   className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                   type="submit"
+                   className="flex-1 bg-red-650 hover:bg-red-705 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shadow-lg shadow-red-200"
+                 >
+                   Commit to Archive
+                 </button>
+               </div>
+             </form>
 
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-mono text-slate-500 uppercase">National Security Infrastructure</span>
-              <h3 className="text-base font-bold font-display tracking-tight text-slate-100">Establish Criminal Investigation File</h3>
-            </div>
+             {/* Close trigger */}
+             <button 
+               onClick={() => setShowCreateCaseModal(false)}
+               className="absolute top-6 right-6 text-slate-300 hover:text-red-650 transition-colors"
+             >
+               <X size={20} />
+             </button>
+           </div>
+        </div>
+      )}
 
-            <form onSubmit={handleCreateCase} className="space-y-4 text-xs font-semibold">
-              <div className="space-y-1 shadow-sm">
-                <label className="text-[10px] font-mono text-slate-500 uppercase">Case Title / Ring Focus</label>
-                <input
-                  required
-                  placeholder="e.g. Cloned Range Rover Sport Transshipment Everglades"
-                  className="w-full bg-[#020409] border border-slate-800 text-xs rounded-xl px-4 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                  value={newCaseTitle}
-                  onChange={e => setNewCaseTitle(e.target.value)}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono text-slate-500 uppercase">Target Chassis VIN</label>
-                  <input
-                    required
-                    placeholder="WBA53BJ0XPX881270..."
-                    maxLength={17}
-                    className="w-full bg-[#020409] border border-slate-800 text-xs rounded-xl px-4 py-2.5 text-slate-200 outline-none focus:border-red-900 font-mono uppercase"
-                    value={newCaseVin}
-                    onChange={e => setNewCaseVin(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono text-slate-500 uppercase">Primary Suspect Name</label>
-                  <input
-                    placeholder="e.g. Alicia Croft"
-                    className="w-full bg-[#020409] border border-slate-800 text-xs rounded-xl px-4 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                    value={newCaseSuspect}
-                    onChange={e => setNewCaseSuspect(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono text-slate-500 uppercase">Authorized Officer Badge</label>
-                  <input
-                    required
-                    placeholder="LEO-8820"
-                    className="w-full bg-[#020409] border border-slate-800 text-xs text-slate-500 rounded-xl px-4 py-2.5 font-mono"
-                    value={newCaseBadge}
-                    onChange={e => setNewCaseBadge(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-mono text-slate-500 uppercase">Target Severity</label>
-                  <select
-                    className="w-full bg-[#020409] border border-slate-800 text-xs rounded-xl px-4 py-2.5 text-slate-200 outline-none focus:border-red-900"
-                    value={newCaseSeverity}
-                    onChange={e => setNewCaseSeverity(e.target.value as any)}
-                  >
-                    <option value="High">🚨 High Severity Intercept</option>
-                    <option value="Medium">⚠️ Medium Priority Lead</option>
-                    <option value="Low">⚡ Low Administrative Review</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono text-slate-500 uppercase">Geographical &amp; Coordinate Description</label>
-                <textarea
-                  placeholder="Summarize suspicious actions observed on JustCarSale, port transit logs, or vehicle database rollbacks..."
-                  rows={3}
-                  className="w-full bg-[#020409] border border-slate-800 rounded-xl px-4 py-2 text-slate-200 outline-none focus:border-red-900"
-                  value={newCaseDesc}
-                  onChange={e => setNewCaseDesc(e.target.value)}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateCaseModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200 transition-colors"
-                >
-                  Dismiss Request
-                </button>
-                <button
-                  type="submit"
-                  className="bg-red-950/80 hover:bg-red-900/90 border border-red-800 text-red-200 px-5 py-2.5 rounded-xl text-xs font-mono font-bold transition-all uppercase"
-                >
-                  Establish Secure Dossier
-                </button>
-              </div>
-            </form>
+      {showAddToWatchlist && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0b1431]/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] border border-slate-200 shadow-2xl w-full max-w-md p-8 space-y-6 relative overflow-hidden">
+             <div className="space-y-1">
+               <span className="text-[10px] font-mono text-red-650 font-bold uppercase tracking-widest">Immediate Recovery Broadcast</span>
+               <h3 className="text-xl font-black text-[#0b1431]">Add Watchlist Target</h3>
+             </div>
+             
+             <form onSubmit={handleCreateWatchlist} className="space-y-4">
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">VIN Code</label>
+                 <input 
+                   required
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:border-red-650"
+                   placeholder="17 CHAR VIN"
+                   maxLength={17}
+                   value={newWatchlistVin}
+                   onChange={e => setNewWatchlistVin(e.target.value)}
+                 />
+               </div>
+               
+               <div className="grid grid-cols-2 gap-4">
+                 <div className="space-y-1.5">
+                   <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Make</label>
+                   <input 
+                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650"
+                     placeholder="e.g. BMW"
+                     value={newWatchlistMake}
+                     onChange={e => setNewWatchlistMake(e.target.value)}
+                   />
+                 </div>
+                 <div className="space-y-1.5">
+                   <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Model</label>
+                   <input 
+                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650"
+                     placeholder="e.g. M5"
+                     value={newWatchlistModel}
+                     onChange={e => setNewWatchlistModel(e.target.value)}
+                   />
+                 </div>
+               </div>
+               
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Flag Reason</label>
+                 <select 
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650"
+                   value={newWatchlistReason}
+                   onChange={e => setNewWatchlistReason(e.target.value as any)}
+                 >
+                   <option>Stolen</option>
+                   <option>Cloned VIN</option>
+                   <option>Customs Export Fraud</option>
+                   <option>Odometer Rollback</option>
+                 </select>
+               </div>
+               
+               <div className="space-y-1.5">
+                 <label className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-widest ml-1">Tactical Notes</label>
+                 <textarea 
+                   rows={2}
+                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs outline-none focus:border-red-650 resize-none"
+                   placeholder="Enter descriptive markers..."
+                   value={newWatchlistNotes}
+                   onChange={e => setNewWatchlistNotes(e.target.value)}
+                 />
+               </div>
+               
+               <div className="pt-4 flex gap-3">
+                 <button 
+                   type="button" 
+                   onClick={() => setShowAddToWatchlist(false)}
+                   className="flex-1 bg-slate-100 py-3 rounded-xl text-xs font-bold uppercase tracking-wider"
+                 >
+                   Cancel
+                 </button>
+                 <button 
+                   type="submit"
+                   className="flex-1 bg-[#0b1431] text-white py-3 rounded-xl text-xs font-bold uppercase tracking-wider shadow-lg"
+                 >
+                   Broadcast Alert
+                 </button>
+               </div>
+             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: PRINTABLE SEIZURE REPORT */}
       {selectedSeizureReport && (
-        <div className="fixed inset-0 bg-slate-955/90 backdrop-blur-md z-[120] flex justify-center items-center p-4">
-          <div className="bg-white text-slate-900 p-8 md:p-12 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto space-y-8 shadow-2xl relative font-sans border-t-8 border-slate-900">
-            <button 
-              onClick={() => setSelectedSeizureReport(null)}
-              className="absolute right-6 top-6 hover:bg-slate-100 text-slate-500 p-2 rounded-xl transition-all"
-            >
-              <X size={18} />
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0b1431]/80 backdrop-blur-md animate-in fade-in duration-300">
+           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative">
+             
+             {/* Print View Simulation Header */}
+             <div className="bg-slate-100 px-10 py-6 border-b border-slate-200 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="bg-red-650 text-white p-2.5 rounded-2xl shadow-lg shadow-red-200">
+                    <Shield size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-[#0b1431] uppercase tracking-tighter italic">Seizure Warrant Summary</h3>
+                    <p className="text-[10px] font-mono text-slate-500 font-bold">GENERATED: {new Date().toUTCString()}</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button className="bg-white border border-slate-250 p-2 rounded-xl text-slate-600 hover:text-red-650 transition-colors shadow-sm">
+                    <Download size={18} />
+                  </button>
+                  <button 
+                    onClick={() => setSelectedSeizureReport(null)}
+                    className="bg-white border border-slate-250 p-2 rounded-xl text-slate-600 hover:text-red-650 transition-colors shadow-sm"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+             </div>
+             
+             {/* Report Body */}
+             <div className="flex-1 overflow-y-auto p-10 font-sans space-y-10">
+                
+                {/* Official Stamp Decoration */}
+                <div className="absolute top-24 right-12 opacity-10 rotate-12 pointer-events-none select-none">
+                  <div className="border-4 border-red-650 text-red-650 rounded-full w-48 h-48 flex flex-col items-center justify-center font-black uppercase text-center p-4">
+                    <div className="text-xl">DEPARTMENT OF</div>
+                    <div className="text-3xl">POLICE</div>
+                    <div className="text-sm mt-1 tracking-[0.2em]">SECURE SEAL</div>
+                  </div>
+                </div>
 
-            {/* Document Header */}
-            <div className="text-center space-y-2 border-b-2 border-slate-900 pb-6 relative">
-              <div className="mx-auto w-10 h-10 border-2 border-slate-900 rounded-full flex items-center justify-center text-slate-900 font-bold text-lg select-none">
-                ★
-              </div>
-              <span className="text-[9px] uppercase tracking-widest block font-bold text-slate-500">NATIONAL SECURITY SERVICE AUTOMOTIVE COMPLIANCE</span>
-              <h2 className="text-lg font-black uppercase tracking-tight text-slate-900">WARRANT &amp; SEIZURE DISCLOSURE REGISTER</h2>
-              <p className="text-[10px] text-slate-450 font-mono">STRICT INTEGRITY CHAIN RECORD // DO NOT DUPLICATE OUTSIDE AGENCY CONTROL</p>
-            </div>
-
-            {/* Document Details Grid */}
-            <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-xs font-medium border-b border-slate-200 pb-5">
-              <div>
-                <span className="text-slate-400 text-[10px] font-mono uppercase block">LEDGER REFERENCE ID</span>
-                <strong className="text-slate-900 text-sm font-mono">{selectedSeizureReport.id}</strong>
-              </div>
-              <div className="text-right">
-                <span className="text-slate-400 text-[10px] font-mono uppercase block">RECORD STAMP DATE</span>
-                <span className="text-slate-900 font-mono">{selectedSeizureReport.reportedAt}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 text-[10px] font-mono uppercase block">PRIMARY TARGET SUSPECT</span>
-                <span className="text-slate-900">{selectedSeizureReport.suspectName}</span>
-              </div>
-              <div className="text-right">
-                <span className="text-slate-400 text-[10px] font-mono uppercase block">CHASSIS SERIAL (VIN)</span>
-                <span className="text-slate-900 font-mono font-bold">{selectedSeizureReport.primaryVin}</span>
-              </div>
-            </div>
-
-            {/* Brief Segment */}
-            <div className="space-y-2">
-              <span className="text-slate-400 text-[10px] font-mono uppercase block">AFFIDAVIT DEPOSITION ANALYSIS</span>
-              <p className="text-xs text-slate-700 leading-relaxed italic">{selectedSeizureReport.description}</p>
-            </div>
-
-            {/* Itemized Evidence list */}
-            <div className="space-y-3">
-              <span className="text-slate-400 text-[10px] font-mono uppercase block">ITEMIZED CONFISCATION LOGS</span>
-              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-                {selectedSeizureReport.evidence.map(e => (
-                  <div key={e.id} className="p-3 bg-slate-50 flex justify-between items-center">
+                <div className="grid grid-cols-2 gap-12 border-b border-slate-200 pb-10 relative z-10">
+                  <div className="space-y-6">
                     <div>
-                      <span className="font-bold text-slate-900 block">{e.title}</span>
-                      <span className="text-[10px] text-slate-500 font-mono uppercase">Custodian: {e.custodian}</span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest block mb-2">Primary Subject Account</span>
+                      <h4 className="text-base font-black text-[#0b1431]">{selectedSeizureReport.suspectName}</h4>
+                      <p className="text-xs text-slate-500 mt-1 italic leading-relaxed">Identity linked via cross-platform correlation of dealer IPs and title history logs.</p>
                     </div>
-                    <span className="text-[11px] text-slate-600 font-mono font-bold bg-slate-200/50 px-2.5 py-0.5 rounded border border-slate-300/10">
-                      {e.id}
-                    </span>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest block mb-2">Physical Asset Target</span>
+                      <p className="text-sm font-bold text-slate-800">VIN: {selectedSeizureReport.primaryVin}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 uppercase font-bold tracking-tight">Status: WARRANT_ISSUED</p>
+                    </div>
                   </div>
-                ))}
 
-                {selectedSeizureReport.evidence.length === 0 && (
-                  <div className="p-4 text-center text-slate-400 text-[11px] font-mono">
-                    No physical, digital, or statement components have been attached to this record.
+                  <div className="space-y-6">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest block mb-2">Legal Jurisdiction</span>
+                      <p className="text-sm font-bold text-slate-800 font-mono">FED-LEO-NODES-V9</p>
+                      <p className="text-xs text-slate-500 mt-1">Authorized under national emergency recovery protocols for high-value asset theft.</p>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest block mb-2">Case Reference ID</span>
+                      <p className="text-sm font-bold text-slate-800 font-mono underline decoration-red-650/40">{selectedSeizureReport.id}</p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </div>
-
-            {/* Signatures block */}
-            <div className="grid grid-cols-2 gap-12 pt-8 text-xs font-mono">
-              <div className="space-y-4">
-                <div className="border-b border-slate-300 h-10 flex items-end">
-                  <span className="text-[10px] italic font-serif text-slate-600 pl-4">{selectedSeizureReport.badgeId} Signature</span>
                 </div>
-                <span className="text-[9px] uppercase tracking-wider text-slate-400">ISSUING OFFICER STAMP</span>
-              </div>
-              <div className="space-y-4">
-                <div className="border-b border-slate-300 h-10 flex items-end">
-                  <span className="text-[10px] italic font-serif text-slate-600 pl-4">SYSTEM VERIFIED // SHA-256</span>
-                </div>
-                <span className="text-[9px] uppercase tracking-wider text-slate-400">Escrow Oversight Division Seal</span>
-              </div>
-            </div>
 
-            {/* Action buttons */}
-            <div className="pt-6 border-t border-slate-200 flex justify-end gap-3 font-sans">
-              <button
-                onClick={() => setSelectedSeizureReport(null)}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-semibold select-none flex items-center gap-1.5 transition-all"
-              >
-                <Download size={13} /> DOWNLOAD OFFICIAL DEPOSITION PDF
-              </button>
-            </div>
-            
-          </div>
+                <div className="space-y-4">
+                  <h5 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-2">Operational Findings Summary</h5>
+                  <p className="text-xs text-slate-700 leading-relaxed indent-8">
+                    {selectedSeizureReport.description} Evidence gathered across multiple nodes (DMV, Marketplace, Insurance Telemetry) indicates a persistent pattern of fraudulent activity 
+                    linked to this asset. Immediate recovery is mandated by the Department of Criminal Compliance. All linked corporate accounts have been frozen pending 
+                    full investigation. Direct intercept at port or roadside is authorized.
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <h5 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-2">Cataloged Evidence Chain</h5>
+                  <div className="space-y-2">
+                    {selectedSeizureReport.evidence.map(e => (
+                      <div key={e.id} className="flex justify-between items-center text-[10px] bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div className="font-mono font-bold">
+                          <span className="text-slate-400 mr-2">[{e.id}]</span>
+                          <span className="text-slate-800">{e.title}</span>
+                        </div>
+                        <span className="text-slate-400 uppercase italic">Verified by {e.custodian}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="pt-10 flex justify-between items-end border-t border-slate-200">
+                  <div className="space-y-2">
+                    <div className="h-12 w-48 border-b border-slate-400 flex items-end px-2">
+                      <span className="text-[10px] font-mono text-slate-400 pb-1 italic">Electronically Signed</span>
+                    </div>
+                    <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 ml-2">Authorized LEO Dispatcher</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400">Security Hash Verification</p>
+                    <p className="text-[10px] font-mono text-slate-300 max-w-xs break-all leading-tight mt-1">882a92-f0291-8921-ac91-0021-9921-ff02-092-229</p>
+                  </div>
+                </div>
+             </div>
+
+             {/* Footer Action */}
+             <div className="p-8 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0">
+                <button 
+                  onClick={() => setSelectedSeizureReport(null)}
+                  className="bg-[#0b1431] text-white px-10 py-3 rounded-2xl text-xs font-bold uppercase tracking-widest shadow-xl shadow-slate-200 transition-transform active:scale-95"
+                >
+                  Close Document Workspace
+                </button>
+             </div>
+           </div>
         </div>
       )}
-
     </div>
   );
 }

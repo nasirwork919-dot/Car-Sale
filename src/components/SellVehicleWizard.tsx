@@ -9,10 +9,12 @@ import {
   ArrowRight, ArrowLeft, FileText, Globe, RefreshCcw, Trash2, Eye, Gavel, 
   History, User, CheckCircle, Search, Lock, AlertCircle, Sparkles as AI_Icon,
   BookOpen, Layers, HardDrive, ShieldAlert, CheckSquare, Plus, FileSpreadsheet,
-  ChevronDown, X
+  ChevronDown, X, Loader2
 } from 'lucide-react';
 import { Vehicle } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../lib/api';
+import { mapBackendVehicle, BackendVehicle } from '../lib/vehicleAdapter';
 
 const languageNames: Record<'EN' | 'ES' | 'DE' | 'AR' | 'UR' | 'ZH', string> = {
   EN: 'English',
@@ -359,6 +361,9 @@ export default function SellVehicleWizard({ onPublishListing, onCancel }: SellVe
   const [webcamError, setWebcamError] = useState<string | null>(null);
   const [activeQrSlot, setActiveQrSlot] = useState<string | null>(null);
   
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
   const wizardVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const wizardCanvasRef = React.useRef<HTMLCanvasElement | null>(null);
 
@@ -517,51 +522,57 @@ export default function SellVehicleWizard({ onPublishListing, onCancel }: SellVe
   };
 
   // PUBLISH FINAL
-  const handleFinalPublish = () => {
-    // Compile a beautiful new Vehicle object
-    const finalVehicle: Vehicle = {
-      vin: vinInput || `WP0-${Date.now().toString().slice(-6)}`,
-      year: vehicleSpecs.year,
-      make: vehicleSpecs.make || 'Porsche',
-      model: vehicleSpecs.model || '911 Custom Asset',
-      trim: vehicleSpecs.trim,
-      price: askingPrice,
-      mileage: vehicleSpecs.mileage,
-      engine: vehicleSpecs.engine,
-      transmission: vehicleSpecs.transmission,
-      driveType: vehicleSpecs.drivetrain,
-      location: vehicleSpecs.location,
-      extColor: vehicleSpecs.extColor,
-      intColor: vehicleSpecs.intColor,
-      images: [
-        photos.hero || photoPrompts[0].sampleUrl,
-        photos.rear || photoPrompts[1].sampleUrl,
-        photos.dash || photoPrompts[2].sampleUrl,
-        photos.engine || photoPrompts[3].sampleUrl,
-        photos.interior || photoPrompts[4].sampleUrl
-      ],
-      certified: connectOldOwnership || documents.serviceLogs,
-      status: 'Available',
-      riskScore: 'Low',
-      valuation: estimatedValuation,
-      marketPrice: Math.round(estimatedValuation * 0.98),
-      condition: vehicleCondition,
-      isDamagedCategory: isDamagedCategory || vehicleCondition === 'Damaged',
-      damageSeverity: vehicleCondition === 'Damaged' ? 'Moderate' : undefined,
-      damageDetails: vehicleCondition === 'Damaged' ? 'Front bumper scuffs, side-skirt scrape, suspension struts require realignment.' : undefined,
-      requiredRepairs: vehicleCondition === 'Damaged' ? ['Front bumper respray', 'Wheel alignment', 'Strut mounting assembly replacement'] : undefined,
-      description: descriptionEnglish || simulatedDescriptions.EN,
-      descriptions: {
-        EN: descriptionEnglish || simulatedDescriptions.EN,
-        ES: simulatedDescriptions.ES,
-        DE: simulatedDescriptions.DE,
-        AR: simulatedDescriptions.AR,
-        UR: simulatedDescriptions.UR,
-        ZH: simulatedDescriptions.ZH
-      }
-    };
+  const handleFinalPublish = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    onPublishListing(finalVehicle);
+    try {
+      // 1. Create the vehicle
+      const backendVehicle = await api.post<BackendVehicle>('/vehicles', {
+        vin: vinInput || `WP0-${Date.now().toString().slice(-6)}`,
+        make: vehicleSpecs.make || 'Porsche',
+        model: vehicleSpecs.model || '911 Custom Asset',
+        year: vehicleSpecs.year,
+        mileage: vehicleSpecs.mileage,
+        fuelType: vehicleSpecs.fuelType || 'Gasoline',
+        transmission: vehicleSpecs.transmission,
+        price: askingPrice,
+        country: vehicleSpecs.location.split(',')[1]?.trim() || 'USA',
+        city: vehicleSpecs.location.split(',')[0]?.trim() || 'Chicago',
+        condition: vehicleCondition.toUpperCase(),
+        description: descriptionEnglish || simulatedDescriptions.EN,
+        color: vehicleSpecs.extColor,
+        bodyType: vehicleSpecs.trim,
+      });
+
+      // 2. Upload photos if any
+      const photosToUpload = [
+        { key: 'hero', photo: photos.hero },
+        { key: 'rear', photo: photos.rear },
+        { key: 'dash', photo: photos.dash },
+        { key: 'engine', photo: photos.engine },
+        { key: 'interior', photo: photos.interior }
+      ].filter(p => p.photo && !p.photo.startsWith('http')); // Only upload new dataURLs
+
+      if (photosToUpload.length > 0) {
+        await api.post(`/vehicles/${backendVehicle.id}/photos`, {
+          photos: photosToUpload.map((p, idx) => ({
+            url: p.photo,
+            isPrimary: p.key === 'hero',
+            order: idx
+          }))
+        });
+      }
+
+      // 3. Map back to frontend type and notify
+      const finalVehicle = mapBackendVehicle(backendVehicle);
+      onPublishListing(finalVehicle);
+    } catch (err: any) {
+      console.error("Failed to publish vehicle:", err);
+      setSubmitError(err.message || "Failed to publish listing. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1993,18 +2004,35 @@ export default function SellVehicleWizard({ onPublishListing, onCancel }: SellVe
                 }
                 setCurrentStep(prev => prev + 1);
               }}
-              className="flex items-center gap-1.5 bg-[#8B0000] hover:bg-[#b00d0d] text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-md shadow-[#8B0000]/20"
+              disabled={isSubmitting}
+              className="flex items-center gap-1.5 bg-[#8B0000] hover:bg-[#b00d0d] text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-md shadow-[#8B0000]/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next Step <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleFinalPublish}
-              className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm"
-            >
-              <Check className="w-4 h-4" /> Publish Listing Now
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              {submitError && (
+                <span className="text-[10px] text-red-600 font-bold bg-red-50 px-2 py-1 rounded">
+                  {submitError}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleFinalPublish}
+                disabled={isSubmitting}
+                className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Publishing...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" /> Publish Listing Now
+                  </>
+                )}
+              </button>
+            </div>
           )}
         </div>
       </div>

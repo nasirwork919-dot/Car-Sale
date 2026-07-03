@@ -5,6 +5,8 @@
 
 import React, { useState } from 'react';
 import { Mail, Shield, Briefcase, UserCheck, Lock, Landmark, Check, AlertCircle, ArrowRight } from 'lucide-react';
+import { useAuth, backendRoleToFrontend } from '../lib/AuthContext';
+import { ApiError } from '../lib/api';
 
 interface SignInProps {
   targetRole: 'personal' | 'business' | 'insurance' | 'government' | 'police';
@@ -13,6 +15,7 @@ interface SignInProps {
 }
 
 export default function SignIn({ targetRole, onSuccess, onCancel }: SignInProps) {
+  const { login } = useAuth();
   const [selectedRole, setSelectedRole] = useState<'personal' | 'business' | 'insurance' | 'government' | 'police'>(targetRole);
   
   // Input fields for Personal Portal
@@ -40,60 +43,61 @@ export default function SignIn({ targetRole, onSuccess, onCancel }: SignInProps)
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    let email = '';
+    let password = '';
+
+    if (selectedRole === 'personal') {
+      if (!personalEmail.includes('@') || personalPass.length < 4) {
+        setErrorMsg('Invalid email format or password must be at least 4 characters.');
+        return;
+      }
+      email = personalEmail;
+      password = personalPass;
+    } else if (selectedRole === 'business') {
+      if (!businessEmail.includes('@') || !businessEin.trim() || businessPass.length < 4) {
+        setErrorMsg('Company email, EIN Tax Code, and password are all required.');
+        return;
+      }
+      email = businessEmail;
+      password = businessPass;
+    } else if (selectedRole === 'insurance') {
+      if (!insuranceEmail.includes('@') || !insuranceLicense.trim() || insurancePass.length < 4) {
+        setErrorMsg('Invalid organization email, Underwriter license code, or passcode.');
+        return;
+      }
+      email = insuranceEmail;
+      password = insurancePass;
+    } else if (selectedRole === 'government') {
+      if (!govId.trim() || !govKey.trim()) {
+        setErrorMsg('Terminal ID and Authorization Key are required for Government Staff access.');
+        return;
+      }
+      email = govId;
+      password = govKey;
+    } else if (selectedRole === 'police') {
+      if (!policeBadge.trim() || !policeKey.trim()) {
+        setErrorMsg('Officer Badge ID and Secure LEO passphrase are required for Police Force access.');
+        return;
+      }
+      email = policeBadge;
+      password = policeKey;
+    }
+
     setLoading(true);
-
-    // Simulate authenticating specific credentials
-    setTimeout(() => {
+    try {
+      const user = await login(email, password);
+      const mappedRole = backendRoleToFrontend(user.role);
+      onSuccess(mappedRole as 'personal' | 'business' | 'insurance' | 'government' | 'police');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Unable to sign in. Please check your credentials.';
+      setErrorMsg(message);
+    } finally {
       setLoading(false);
-
-      if (selectedRole === 'personal') {
-        if (!personalEmail.includes('@') || personalPass.length < 4) {
-          setErrorMsg('Invalid email format or password must be at least 4 characters.');
-          return;
-        }
-        alert(`Successfully Authenticated into the Personal Buyer Session: ${personalEmail}`);
-        onSuccess('personal');
-      } 
-      
-      else if (selectedRole === 'business') {
-        if (!businessEmail.includes('@') || !businessEin.trim() || businessPass.length < 4) {
-          setErrorMsg('Company email, EIN Tax Code, and password are all required.');
-          return;
-        }
-        alert(`Cleared Escrow Authority! Signed into Corporate Dealer Workspace: ${businessEmail}`);
-        onSuccess('business');
-      } 
-      
-      else if (selectedRole === 'insurance') {
-        if (!insuranceEmail.includes('@') || !insuranceLicense.trim() || insurancePass.length < 4) {
-          setErrorMsg('Invalid organization email, Underwriter license code, or passcode.');
-          return;
-        }
-        alert(`Authorized access! Underwriting session active for license: ${insuranceLicense}`);
-        onSuccess('insurance');
-      }
-
-      else if (selectedRole === 'government') {
-        if (!govId.trim() || !govKey.trim()) {
-          setErrorMsg('Terminal ID and Authorization Key are required for Government Staff access.');
-          return;
-        }
-        alert(`Uplink authorized! Secure Gov administration session active for terminal: ${govId}`);
-        onSuccess('government');
-      }
-
-      else if (selectedRole === 'police') {
-        if (!policeBadge.trim() || !policeKey.trim()) {
-          setErrorMsg('Officer Badge ID and Secure LEO passphrase are required for Police Force access.');
-          return;
-        }
-        alert(`Tactical uplink ready! Criminal Investigations authority desk active for Badge #${policeBadge}`);
-        onSuccess('police');
-      }
-    }, 800);
+    }
   };
 
   return (

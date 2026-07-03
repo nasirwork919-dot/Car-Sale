@@ -16,6 +16,8 @@ import AIFraudWarning from './AIFraudWarning';
 import SovereignActionDesk from './SovereignActionDesk';
 import SellerProfileCard from './SellerProfileCard';
 import SovereignClientChat from './SovereignClientChat';
+import { api } from '../lib/api';
+import { mapBackendVehicle, MappedVehicle } from '../lib/vehicleAdapter';
 
 interface VehicleDetailsProps {
   vehicle: Vehicle;
@@ -26,12 +28,33 @@ interface VehicleDetailsProps {
 }
 
 export default function VehicleDetails({
-  vehicle,
+  vehicle: initialVehicle,
   onBack,
   onNavigateToFinance,
   onNavigateToInsurance,
   initialSubPage
 }: VehicleDetailsProps) {
+  const [vehicle, setVehicle] = useState<Vehicle>(initialVehicle);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Refresh vehicle data from API using backend ID if available
+  useEffect(() => {
+    const backendId = (initialVehicle as any).__id;
+    if (backendId) {
+      setLoading(true);
+      api.get(`/vehicles/${backendId}`)
+        .then(res => {
+          setVehicle(mapBackendVehicle(res));
+          setError(null);
+        })
+        .catch(err => {
+          console.error('Failed to fetch vehicle details:', err);
+          setError('Failed to load latest vehicle data.');
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [initialVehicle]);
   
   // AI Description & Multilingual support
   const [activeDescLanguage, setActiveDescLanguage] = useState<'EN' | 'ES' | 'DE' | 'AR' | 'UR' | 'ZH'>('EN');
@@ -212,16 +235,19 @@ export default function VehicleDetails({
   });
 
   const [chatInput, setChatInput] = useState<string>('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
 
-  const handleSendChat = (e: React.FormEvent) => {
+  const handleSendChat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim()) return;
+    if (!chatInput.trim() || isSendingChat) return;
 
     const userMsg = chatInput.trim();
     const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const roomId = activeChatRoomId;
+    const backendVehicleId = (vehicle as any).__id;
+    const sellerId = (vehicle as any).__sellerId;
 
-    // Append user message
+    // Append user message locally for immediate feedback
     setChatRooms(prev => {
       const currentRoom = prev[roomId];
       if (!currentRoom) return prev;
@@ -235,73 +261,90 @@ export default function VehicleDetails({
       };
     });
     setChatInput('');
+    setIsSendingChat(true);
 
-    // Dispatch custom automated response
-    setTimeout(() => {
-      const lower = userMsg.toLowerCase();
-      let replyText = "";
-
-      if (roomId === 'christian') {
-        if (lower.includes("price") || lower.includes("offer") || lower.includes("cost") || lower.includes("valuation") || lower.includes("buy")) {
-          replyText = `Regarding the escrow pricing matrix, the listed valuation of $${vehicle.price.toLocaleString()} is within the regional median. Feel free to submit your target offer directly on our ledger panel at any time.`;
-        } else if (lower.includes("miles") || lower.includes("mileage") || lower.includes("odometer") || lower.includes("kilometer")) {
-          replyText = `This ${vehicle.year} ${vehicle.make} holds exactly ${vehicle.mileage.toLocaleString()} certified miles. Our Houston Distribution sweep indicates complete historical parity with zero anomalies or tampering warnings.`;
-        } else if (lower.includes("finance") || lower.includes("lease") || lower.includes("monthly") || lower.includes("down") || lower.includes("apr")) {
-          replyText = `For corporate or personal financing, we support excel (4.9%), good (6.5%), and fair (8.9%) APR credit allocations. You can configure down payments and lock in this rate securely in the Finance segment.`;
-        } else if (lower.includes("shipping") || lower.includes("transport") || lower.includes("freight") || lower.includes("delivery")) {
-          replyText = `Our logistics network processes fully enclosed luxury transport as well as standard car carriers. You can calculate full route expenses under Escrow Seals instantly in the Freight Booking calculator.`;
-        } else if (lower.includes("insurance") || lower.includes("warranty") || lower.includes("claims")) {
-          replyText = `The sovereign liability escrow addon and Elite Powertrain Warranty lock instantly upon transaction completion. No active claims or liens are associated with this vehicle chassis, verifying a spotless integrity index.`;
-        } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
-          replyText = `Greetings, John! I am here to facilitate secure transacting, logistics matching, and customs declaration for this ${vehicle.make}. How may I serve your procurement cycle today?`;
-        } else {
-          replyText = `Splendid request. I have referenced the telematics dashboard and complete title logs for this ${vehicle.make}. We can coordinate direct inspections, dealer test drives, or log escrow financing pre-approvals whenever you are ready.`;
-        }
-      } else if (roomId === 'elena') {
-        if (lower.includes("cost") || lower.includes("price") || lower.includes("rate") || lower.includes("freight") || lower.includes("delivery")) {
-          replyText = `Our freight rate is highly competitive. Open carrier averages $0.75 per mile, while our elite Enclosed Cargo averages $1.50 per mile with complete environmental isolation. Under sovereign logistics, this remains completely locked.`;
-        } else if (lower.includes("time") || lower.includes("when") || lower.includes("day") || lower.includes("schedule")) {
-          replyText = `Typically, dispatch occurs within 48 hours of secure escrow clearance. The transit corridor for this route generally takes 3 to 5 calendar days depending on weather and truck route planning.`;
-        } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
-          replyText = `Hello John! How can I assist you with the delivery setup? Ask me about transport quotes, schedules, or enclosed trailer specifications!`;
-        } else {
-          replyText = `Understood. I will cross-reference this requirement with our carrier log database. Let me know if you would like me to lock a premium trailer slot for this transit route.`;
-        }
-      } else if (roomId === 'aria') {
-        if (lower.includes("apr") || lower.includes("rate") || lower.includes("interest") || lower.includes("finance")) {
-          replyText = `Our tier-1 interest rate is 5.9% APR for terms up to 60 months. This is secured through premier sovereign partner banks, requiring a minimal downpayment of roughly 15%.`;
-        } else if (lower.includes("deposit") || lower.includes("escrow") || lower.includes("wire") || lower.includes("payment")) {
-          replyText = `All deposits are safely stored in high-tier bank vaults and only released into the dealer account on the exact moment you inspect the registration and sign the release protocol.`;
-        } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
-          replyText = `Greetings, John! I am ready to process your escrow wire configurations or lease limits. What terms are you hoping to secure today?`;
-        } else {
-          replyText = `Splendid terms. I have updated our finance files with these coordinates. Once you click 'Apply Lease Approval' in the Configure center, it instantly locks in our treasury ledger.`;
-        }
-      } else { // sovereign protection care desk
-        if (lower.includes("warranty") || lower.includes("repair") || lower.includes("break") || lower.includes("engine")) {
-          replyText = `Our Elite Powertrain Warranty provides 12-month zero-deductible coverage on the engine blocks, gear housing, differential joints, and all active fuel line pumps. Let me know if you want customized durations.`;
-        } else if (lower.includes("cost") || lower.includes("premium") || lower.includes("price")) {
-          replyText = `Liability surcharges average $45/mo, and secondary powertrain warranty adds a standard $75/mo. Submitting these in the procurement desk adds them safely directly to your escrow ledger.`;
-        } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
-          replyText = `Hello! How can Sovereign Care help secure your vehicle purchase today? Ask me about warranty plans, mechanical reviews, or immediate coverage setup.`;
-        } else {
-          replyText = `Understood. Your protection preferences are saved in the sovereign ledger database. Once activated, continuous status monitoring triggers immediately.`;
-        }
+    try {
+      // If it's a real seller, send to backend
+      if (roomId === 'christian' && sellerId) {
+        await api.post('/messages', {
+          receiverId: sellerId,
+          vehicleId: backendVehicleId,
+          content: userMsg
+        });
       }
+      
+      // Dispatch custom automated response (mocking for non-seller rooms or as a fallback/simulated agent)
+      setTimeout(() => {
+        const lower = userMsg.toLowerCase();
+        let replyText = "";
 
-      setChatRooms(prev => {
-        const currentRoom = prev[roomId];
-        if (!currentRoom) return prev;
-        return {
-          ...prev,
-          [roomId]: {
-            ...currentRoom,
-            messages: [...currentRoom.messages, { sender: 'agent', text: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
-            typing: false
+        if (roomId === 'christian') {
+          if (lower.includes("price") || lower.includes("offer") || lower.includes("cost") || lower.includes("valuation") || lower.includes("buy")) {
+            replyText = `Regarding the escrow pricing matrix, the listed valuation of $${vehicle.price.toLocaleString()} is within the regional median. Feel free to submit your target offer directly on our ledger panel at any time.`;
+          } else if (lower.includes("miles") || lower.includes("mileage") || lower.includes("odometer") || lower.includes("kilometer")) {
+            replyText = `This ${vehicle.year} ${vehicle.make} holds exactly ${vehicle.mileage.toLocaleString()} certified miles. Our Houston Distribution sweep indicates complete historical parity with zero anomalies or tampering warnings.`;
+          } else if (lower.includes("finance") || lower.includes("lease") || lower.includes("monthly") || lower.includes("down") || lower.includes("apr")) {
+            replyText = `For corporate or personal financing, we support excel (4.9%), good (6.5%), and fair (8.9%) APR credit allocations. You can configure down payments and lock in this rate securely in the Finance segment.`;
+          } else if (lower.includes("shipping") || lower.includes("transport") || lower.includes("freight") || lower.includes("delivery")) {
+            replyText = `Our logistics network processes fully enclosed luxury transport as well as standard car carriers. You can calculate full route expenses under Escrow Seals instantly in the Freight Booking calculator.`;
+          } else if (lower.includes("insurance") || lower.includes("warranty") || lower.includes("claims")) {
+            replyText = `The sovereign liability escrow addon and Elite Powertrain Warranty lock instantly upon transaction completion. No active claims or liens are associated with this vehicle chassis, verifying a spotless integrity index.`;
+          } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
+            replyText = `Greetings, John! I am here to facilitate secure transacting, logistics matching, and customs declaration for this ${vehicle.make}. How may I serve your procurement cycle today?`;
+          } else {
+            replyText = `Splendid request. I have referenced the telematics dashboard and complete title logs for this ${vehicle.make}. We can coordinate direct inspections, dealer test drives, or log escrow financing pre-approvals whenever you are ready.`;
           }
-        };
-      });
-    }, 1000);
+        } else if (roomId === 'elena') {
+          if (lower.includes("cost") || lower.includes("price") || lower.includes("rate") || lower.includes("freight") || lower.includes("delivery")) {
+            replyText = `Our freight rate is highly competitive. Open carrier averages $0.75 per mile, while our elite Enclosed Cargo averages $1.50 per mile with complete environmental isolation. Under sovereign logistics, this remains completely locked.`;
+          } else if (lower.includes("time") || lower.includes("when") || lower.includes("day") || lower.includes("schedule")) {
+            replyText = `Typically, dispatch occurs within 48 hours of secure escrow clearance. The transit corridor for this route generally takes 3 to 5 calendar days depending on weather and truck route planning.`;
+          } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
+            replyText = `Hello John! How can I assist you with the delivery setup? Ask me about transport quotes, schedules, or enclosed trailer specifications!`;
+          } else {
+            replyText = `Understood. I will cross-reference this requirement with our carrier log database. Let me know if you would like me to lock a premium trailer slot for this transit route.`;
+          }
+        } else if (roomId === 'aria') {
+          if (lower.includes("apr") || lower.includes("rate") || lower.includes("interest") || lower.includes("finance")) {
+            replyText = `Our tier-1 interest rate is 5.9% APR for terms up to 60 months. This is secured through premier sovereign partner banks, requiring a minimal downpayment of roughly 15%.`;
+          } else if (lower.includes("deposit") || lower.includes("escrow") || lower.includes("wire") || lower.includes("payment")) {
+            replyText = `All deposits are safely stored in high-tier bank vaults and only released into the dealer account on the exact moment you inspect the registration and sign the release protocol.`;
+          } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
+            replyText = `Greetings, John! I am ready to process your escrow wire configurations or lease limits. What terms are you hoping to secure today?`;
+          } else {
+            replyText = `Splendid terms. I have updated our finance files with these coordinates. Once you click 'Apply Lease Approval' in the Configure center, it instantly locks in our treasury ledger.`;
+          }
+        } else { // sovereign protection care desk
+          if (lower.includes("warranty") || lower.includes("repair") || lower.includes("break") || lower.includes("engine")) {
+            replyText = `Our Elite Powertrain Warranty provides 12-month zero-deductible coverage on the engine blocks, gear housing, differential joints, and all active fuel line pumps. Let me know if you want customized durations.`;
+          } else if (lower.includes("cost") || lower.includes("premium") || lower.includes("price")) {
+            replyText = `Liability surcharges average $45/mo, and secondary powertrain warranty adds a standard $75/mo. Submitting these in the procurement desk adds them safely directly to your escrow ledger.`;
+          } else if (lower.includes("hello") || lower.includes("hi") || lower.includes("hey") || lower.includes("greetings")) {
+            replyText = `Hello! How can Sovereign Care help secure your vehicle purchase today? Ask me about warranty plans, mechanical reviews, or immediate coverage setup.`;
+          } else {
+            replyText = `Understood. Your protection preferences are saved in the sovereign ledger database. Once activated, continuous status monitoring triggers immediately.`;
+          }
+        }
+
+        setChatRooms(prev => {
+          const currentRoom = prev[roomId];
+          if (!currentRoom) return prev;
+          return {
+            ...prev,
+            [roomId]: {
+              ...currentRoom,
+              messages: [...currentRoom.messages, { sender: 'agent', text: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }],
+              typing: false
+            }
+          };
+        });
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      // local error handling could go here
+    } finally {
+      setIsSendingChat(false);
+    }
   };
 
   // Service / Title / Check tabs state for the Documentation segment
@@ -428,246 +471,18 @@ export default function VehicleDetails({
   };
 
   if (activeSubPage === 'chat') {
-    const activeRoom = (chatRooms[activeChatRoomId] || chatRooms.christian) as ChatRoom;
-    const filteredRooms = (Object.values(chatRooms) as ChatRoom[]).filter(room => 
-      room.name.toLowerCase().includes(chatSearchQuery.toLowerCase()) || 
-      room.role.toLowerCase().includes(chatSearchQuery.toLowerCase())
-    );
-
     return (
       <div className="w-full bg-zinc-50/70 text-zinc-900 font-sans min-h-screen py-4 sm:py-8 px-2 sm:px-6 select-none animate-fadeIn flex flex-col justify-center items-center">
-        <div className="max-w-6xl w-full bg-white border border-zinc-150 rounded-[28px] shadow-md overflow-hidden flex h-[700px]">
-          
-          {/* Whats-app style LEFT column (Sidebar list of chats) */}
-          <div className={`w-full md:w-[360px] shrink-0 border-r border-zinc-100 flex flex-col h-full bg-zinc-50/30 relative ${
-            mobileShowList ? 'flex' : 'hidden md:flex'
-          }`}>
-            {/* Sidebar header */}
-            <div className="p-4.5 border-b border-zinc-100 bg-white shrink-0">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[13px] font-black uppercase tracking-widest text-zinc-800">
-                  Procurement Desks
-                </h2>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <input
-                  type="text"
-                  value={chatSearchQuery}
-                  onChange={(e) => setChatSearchQuery(e.target.value)}
-                  placeholder="Search live contacts..."
-                  className="w-full h-10 pl-9.5 pr-4 bg-zinc-100 hover:bg-zinc-150/50 focus:bg-white border border-transparent focus:border-zinc-200 rounded-xl outline-none text-xs text-zinc-850 font-bold transition-all placeholder-zinc-400"
-                />
-              </div>
-            </div>
-
-            {/* List of active rooms */}
-            <div className="flex-1 overflow-y-auto divide-y divide-zinc-100/60 scrollbar-none">
-              {filteredRooms.length === 0 ? (
-                <div className="p-6 text-center text-xs text-zinc-400 font-medium">
-                  No matching desks available.
-                </div>
-              ) : (
-                filteredRooms.map((room) => {
-                  const isSelected = room.id === activeChatRoomId;
-                  const lastMsg = room.messages[room.messages.length - 1];
-                  return (
-                    <button
-                      key={room.id}
-                      onClick={() => {
-                        setActiveChatRoomId(room.id);
-                        setMobileShowList(false);
-                      }}
-                      className={`w-full flex items-center gap-3.5 p-4 text-left transition-all duration-150 outline-none cursor-pointer ${
-                        isSelected 
-                          ? 'bg-zinc-50 border-l-4 border-[#8B0000]' 
-                          : 'bg-transparent border-l-4 border-transparent hover:bg-zinc-50/60'
-                      }`}
-                    >
-                      {/* Real Avatar Image */}
-                      <div className="relative shrink-0 select-none">
-                        <img
-                          src={room.avatar}
-                          referrerPolicy="no-referrer"
-                          className="w-11 h-11 rounded-full object-cover border border-zinc-200/60 shadow-xs bg-zinc-100"
-                          alt={room.name}
-                        />
-                        {room.isOnline && (
-                          <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2.5 border-white rounded-full"></div>
-                        )}
-                      </div>
-
-                      {/* Snippet details */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline">
-                          <h4 className="text-[13px] font-extrabold text-zinc-900 truncate leading-tight">
-                            {room.name}
-                          </h4>
-                          <span className="text-[9px] text-zinc-400 font-bold uppercase shrink-0 font-mono">
-                            {lastMsg ? lastMsg.time : 'Now'}
-                          </span>
-                        </div>
-                        <p className="text-[11.5px] text-zinc-450 truncate mt-1 font-medium leading-none">
-                          {lastMsg ? lastMsg.text : 'No messages'}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            
-            {/* Sidebar quick exit */}
-            <div className="p-4 border-t border-zinc-100 bg-white shrink-0">
-              <button
-                onClick={() => setActiveSubPage('details')}
-                className="w-full py-2.5 border border-zinc-200 hover:border-zinc-350 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 duration-200 cursor-pointer text-center"
-              >
-                Back to Details
-              </button>
-            </div>
-          </div>
-
-          {/* Whats-app style RIGHT column (Current selected Chat conversation) */}
-          <div className={`flex-1 flex flex-col h-full bg-[#fafafa]/50 ${
-            !mobileShowList ? 'flex' : 'hidden md:flex'
-          }`}>
-            
-            {/* Chat header */}
-            <div className="px-4.5 py-3.5 border-b border-zinc-100 bg-white flex items-center justify-between shrink-0 font-sans">
-              <div className="flex items-center gap-2.5">
-                {/* On mobile, standard Left Arrow back to channels list */}
-                <button
-                  type="button"
-                  onClick={() => setMobileShowList(true)}
-                  className="md:hidden p-2 -ml-2 hover:bg-zinc-100 rounded-full text-zinc-650 cursor-pointer transition-transform"
-                >
-                  <ArrowLeft className="w-5 h-5 stroke-[2.5]" />
-                </button>
-
-                <div className="relative shrink-0 select-none">
-                  <img
-                    src={activeRoom.avatar}
-                    referrerPolicy="no-referrer"
-                    className="w-9.5 h-9.5 rounded-full object-cover border border-zinc-200/60 shadow-xs bg-zinc-100"
-                    alt={activeRoom.name}
-                  />
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-black text-zinc-900 tracking-tight leading-tight">
-                    {activeRoom.name}
-                  </h3>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`w-1.5 h-1.5 rounded-full ${activeRoom.isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-300'}`}></span>
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
-                      {activeRoom.isOnline ? 'ONLINE' : 'OFFLINE'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setActiveSubPage('details')}
-                  className="w-9 h-9 rounded-full border border-zinc-150/75 flex items-center justify-center text-zinc-550 hover:text-zinc-950 hover:bg-zinc-50 cursor-pointer transition-all active:scale-95 duration-200"
-                  title="Return to specifications"
-                >
-                  <ArrowLeft className="w-4 h-4 stroke-[2]" />
-                </button>
-              </div>
-            </div>
-
-            {/* Scrollable conversation bubble stack */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5.5 space-y-4 bg-zinc-50/15 scrollbar-thin">
-              {/* Central information tag */}
-              <div className="text-center py-2.5 space-y-1 max-w-sm mx-auto select-none">
-                <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest font-sans">
-                  Sovereign Escrow Channel
-                </p>
-                <p className="text-[10.5px] text-zinc-405 leading-relaxed font-sans font-medium">
-                  Direct ledger synchronization configured for {vehicle.year} {vehicle.make}. Security filters authorized.
-                </p>
-              </div>
-
-              {activeRoom.messages.map((msg, idx) => {
-                const isUser = msg.sender === 'user';
-                return (
-                  <div key={idx} className={`flex items-end gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
-                    {!isUser && (
-                      <img
-                        src={activeRoom.avatar}
-                        referrerPolicy="no-referrer"
-                        className="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-xs select-none border border-zinc-200/50 bg-zinc-100"
-                        alt={activeRoom.name}
-                      />
-                    )}
-
-                    <div className="flex flex-col space-y-1.5 max-w-[76%]">
-                      <div className={`px-4 py-2.5 text-[13px] leading-relaxed select-text font-medium shadow-2xs ${
-                        isUser
-                          ? 'bg-[#8B0000] text-white rounded-[18px] rounded-br-[4px]'
-                          : 'bg-white text-zinc-850 border border-zinc-200/50 rounded-[18px] rounded-bl-[4px]'
-                      }`}>
-                        {msg.text}
-                      </div>
-                      <span className={`text-[9.5px]/none text-zinc-400 font-bold px-1 ${isUser ? 'text-right' : 'text-left'}`}>
-                        {msg.time}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Dynamic typing bouncing dots */}
-              {activeRoom.typing && (
-                <div className="flex items-end gap-2.5 justify-start">
-                  <img
-                    src={activeRoom.avatar}
-                    referrerPolicy="no-referrer"
-                    className="w-7 h-7 rounded-full object-cover shrink-0 mb-1 shadow-xs select-none border border-zinc-200/50 bg-zinc-100"
-                    alt={activeRoom.name}
-                  />
-                  <div className="bg-white border border-zinc-200/55 px-4 py-3 rounded-[18px] rounded-bl-[4px] flex items-center gap-1.5 shadow-2xs">
-                    <span className="w-1.5 h-1.5 bg-[#8B0000] rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                    <span className="w-1.5 h-1.5 bg-[#8B0000] rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                    <span className="w-1.5 h-1.5 bg-[#8B0000] rounded-full animate-bounce"></span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Input bar */}
-            <div className="p-4 bg-white border-t border-zinc-100 shrink-0">
-              <form onSubmit={handleSendChat} className="flex gap-2.5 items-center">
-                <input
-                  type="text"
-                  placeholder={`Send secure message to ${activeRoom.name}...`}
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  className="flex-1 h-11 bg-zinc-50 hover:bg-zinc-100/55 focus:bg-white border border-zinc-205 focus:border-zinc-350 rounded-full px-5 outline-none text-[13px] text-zinc-800 focus:ring-4 focus:ring-[#8B0000]/5 transition-all font-sans placeholder-zinc-400 font-medium"
-                />
-                <button
-                  type="submit"
-                  className="w-11 h-11 bg-[#8B0000] hover:bg-[#a80d0d] text-white rounded-full flex items-center justify-center transition-all active:scale-95 duration-200 cursor-pointer shrink-0"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-              <p className="text-[9.5px] text-zinc-400 text-center font-bold uppercase tracking-widest mt-2.5">
-                Vetted Escrow Ledger Transmission
-              </p>
-            </div>
-
-          </div>
-
+        <div className="max-w-6xl w-full">
+          <SovereignClientChat 
+            standalone 
+            vehicleId={vehicle.id} 
+            onBack={() => setActiveSubPage('details')}
+          />
         </div>
       </div>
     );
   }
-
-
-
   if (activeSubPage === 'booking') {
     return (
       <div className="w-full bg-white text-zinc-900 font-sans min-h-screen py-10 px-4 sm:px-6 select-none animate-fadeIn">

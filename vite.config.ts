@@ -16,7 +16,10 @@ export default defineConfig(() => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Ignore agent/runtime state dirs so their constant log writes don't trigger full page reloads.
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: ['**/.local/**', '**/.cache/**', '**/.git/**', '**/.agents/**'],
+      },
       host: '0.0.0.0',
       allowedHosts: true as const,
     },
