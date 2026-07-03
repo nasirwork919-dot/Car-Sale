@@ -1,0 +1,81 @@
+Steps 1-4 are complete — auth, vehicles, marketplace, businesses, reviews, bookings, auctions, transport, VIN, inspections, insurance, claims, transfers, stolen reports, messaging, notifications, spare parts, documents all working. Now build Step 5: Dashboard Analytics, Admin Panel, and Search.
+
+Build ALL of these endpoints in /server. Do NOT touch anything in src/.
+
+1. DASHBOARD — USER (Personal):
+   - GET /api/dashboard/user — Auth required. Return:
+     * myVehicles: count of user's active vehicles
+     * myActiveAuctions: count of auctions user is selling
+     * myActiveBids: count of auctions user has bid on
+     * myOpenClaims: count of open insurance claims
+     * myPolicies: count of active insurance policies
+     * myBookings: count of upcoming bookings (date >= today)
+     * myUnreadMessages: unread message count
+     * myUnreadNotifications: unread notification count
+     * recentActivity: last 10 notifications
+
+2. DASHBOARD — BUSINESS:
+   - GET /api/dashboard/business — Auth required (must have business profile). Return:
+     * totalListings: active vehicles from this business
+     * totalSold: sold vehicles
+     * avgRating: business rating
+     * totalReviews: review count
+     * upcomingBookings: next 5 bookings with user details
+     * recentReviews: last 5 reviews
+     * totalRevenue: sum of sold vehicle prices (approximate)
+     * monthlyListings: vehicles listed per month for last 6 months (for chart data)
+
+3. DASHBOARD — GOVERNMENT:
+   - GET /api/dashboard/government — Auth required, role GOVERNMENT. Return:
+     * totalRegisteredVehicles: all vehicles in system
+     * totalInspections: all inspections
+     * passRate: percentage of PASSED inspections
+     * failRate: percentage of FAILED inspections
+     * flaggedVehicles: count of FLAGGED status vehicles
+     * recentInspections: last 10 inspections with vehicle + inspector details
+     * inspectionsByMonth: count per month for last 6 months (chart data)
+     * topFraudFlags: most common fraud flag types from inspections
+
+4. DASHBOARD — POLICE:
+   - GET /api/dashboard/police — Auth required, role POLICE. Return:
+     * totalStolenReports: all reports
+     * openCases: count where status = OPEN or INVESTIGATING
+     * recoveredVehicles: count where status = RECOVERED
+     * closedCases: count where status = CLOSED
+     * recentReports: last 10 stolen reports with vehicle details
+     * reportsByMonth: count per month for last 6 months (chart data)
+     * flaggedVehicles: all vehicles with status FLAGGED (with details)
+
+5. DASHBOARD — INSURANCE:
+   - GET /api/dashboard/insurance — Auth required, role INSURANCE. Return:
+     * totalPolicies: all policies in system
+     * activePolicies: count of ACTIVE
+     * totalClaims: all claims
+     * openClaims: count of OPEN/REVIEWING claims
+     * approvedClaims: count of APPROVED
+     * deniedClaims: count of DENIED
+     * recentClaims: last 10 claims with vehicle + user details
+     * claimsByMonth: count per month for last 6 months (chart data)
+     * totalPremiumValue: sum of all active policy premiums
+
+6. ADMIN ENDPOINTS:
+   - GET /api/admin/users — Admin only (create an ADMIN role or use GOVERNMENT as admin for now). List all users with pagination, search by name/email, filter by role.
+   - PATCH /api/admin/users/:id/role — Change user role.
+   - PATCH /api/admin/users/:id/verify — Verify user identity (set identityVerified=true).
+   - PATCH /api/admin/users/:id/ban — Soft delete user (set deletedAt).
+   - GET /api/admin/businesses — List all businesses. Filter by: verified, businessType.
+   - PATCH /api/admin/businesses/:id/verify — Approve/verify a business (set verified=true).
+   - PATCH /api/admin/businesses/:id/reject — Reject business (set verified=false, optionally delete).
+   - GET /api/admin/stats — Platform-wide stats: total users, total vehicles, total businesses, total auctions, total transactions, users registered this week, vehicles listed this week.
+   - GET /api/admin/flagged — All flagged vehicles + open stolen reports + open claims in one view.
+
+7. GLOBAL SEARCH:
+   - GET /api/search?q=keyword — Public. Search across multiple entities at once. Return:
+     * vehicles: matching vehicles (by make, model, description) — max 5 results
+     * businesses: matching businesses (by name, description) — max 5 results
+     * spareParts: matching parts (by name, oem) — max 5 results
+     * Include a "total" count for each category so the frontend can show "See all X results"
+
+Create route files: dashboardRoutes.ts, adminRoutes.ts, searchRoutes.ts. Register all in the backend entry point.
+
+Test with curl: each dashboard endpoint with the correct role token, admin user list, admin verify business, global search.

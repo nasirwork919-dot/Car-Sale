@@ -17,6 +17,9 @@ import messageRoutes from "./routes/messageRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import sparePartRoutes from "./routes/sparePartRoutes";
 import documentRoutes from "./routes/documentRoutes";
+import dashboardRoutes from "./routes/dashboardRoutes";
+import adminRoutes from "./routes/adminRoutes";
+import searchRoutes from "./routes/searchRoutes";
 
 const PORT = Number(process.env.BACKEND_PORT) || 3001;
 
@@ -47,6 +50,9 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/spare-parts", sparePartRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/search", searchRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

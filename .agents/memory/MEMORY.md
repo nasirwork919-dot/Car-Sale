@@ -1,3 +1,4 @@
 - [Express proxy to internal backend](express-proxy-backend.md) — mounting http-proxy-middleware under a path prefix strips that prefix and breaks POST bodies unless handled explicitly.
 - [Prisma migrations in Replit](prisma-migrations-in-replit.md) — `prisma migrate dev` is interactive-only and fails here; use manual diff+psql-apply instead, and how to repair a corrupted `_prisma_migrations` table.
 - [Workflow restart can empty the dev DB](workflow-restart-empties-db.md) — after restarting the workflow (e.g. post schema/migration change), re-seed and re-verify auth before further testing; a crashed backend can also take down the whole concurrently workflow.
+- [Admin role convention](admin-role-convention.md) — no ADMIN role in schema; GOVERNMENT role is reused as the admin role for `/api/admin/*` and gov-only dashboards.
