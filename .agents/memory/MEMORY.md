@@ -1,1 +1,2 @@
 - [Express proxy to internal backend](express-proxy-backend.md) — mounting http-proxy-middleware under a path prefix strips that prefix and breaks POST bodies unless handled explicitly.
+- [Prisma migrations in Replit](prisma-migrations-in-replit.md) — `prisma migrate dev` is interactive-only and fails here; use manual diff+psql-apply instead, and how to repair a corrupted `_prisma_migrations` table.

@@ -1,6 +1,11 @@
 import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes";
+import vehicleRoutes from "./routes/vehicleRoutes";
+import businessRoutes from "./routes/businessRoutes";
+import reviewRoutes from "./routes/reviewRoutes";
+import bookingRoutes from "./routes/bookingRoutes";
+import marketplaceRoutes from "./routes/marketplaceRoutes";
 
 const PORT = Number(process.env.BACKEND_PORT) || 3001;
 
@@ -15,6 +20,11 @@ app.get("/api/backend-health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/vehicles", vehicleRoutes);
+app.use("/api/businesses", businessRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/marketplace", marketplaceRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

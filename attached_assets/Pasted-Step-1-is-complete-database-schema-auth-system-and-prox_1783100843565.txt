@@ -1,0 +1,66 @@
+Step 1 is complete — database schema, auth system, and proxy are all working. Now build Step 2: Core Vehicle & Marketplace API.
+
+Build ALL of these endpoints in /server. Do NOT touch anything in src/.
+
+1. VEHICLES CRUD:
+   - POST /api/vehicles — Create listing (auth required, seller = current user). Accept all vehicle fields + photo URLs.
+   - GET /api/vehicles — Public. List all active vehicles. Support these query params:
+     * search (keyword search across make, model, description)
+     * make, model, year (exact filters)
+     * minPrice, maxPrice
+     * minYear, maxYear
+     * minMileage, maxMileage
+     * fuelType, transmission, bodyType, color
+     * condition (NEW, USED, DAMAGED, EXPORT)
+     * country, city
+     * sortBy (price_asc, price_desc, year_desc, mileage_asc, newest)
+     * page, limit (pagination, default 20 per page)
+   - GET /api/vehicles/:id — Public. Single vehicle with all details, photos, seller info.
+   - PUT /api/vehicles/:id — Update listing (auth required, must be owner).
+   - DELETE /api/vehicles/:id — Soft delete (auth required, must be owner).
+   - GET /api/vehicles/my-listings — Auth required. Current user's vehicles.
+   - PATCH /api/vehicles/:id/status — Update status (ACTIVE, SOLD, RESERVED, EXPIRED). Owner only.
+
+2. VEHICLE PHOTOS:
+   - POST /api/vehicles/:id/photos — Upload photo URLs (auth, owner only). Accept array of {url, isPrimary, order}.
+   - DELETE /api/vehicles/:vehicleId/photos/:photoId — Remove photo (auth, owner only).
+   - PATCH /api/vehicles/:vehicleId/photos/:photoId — Update isPrimary or order.
+
+3. MARKETPLACE STATS:
+   - GET /api/marketplace/stats — Public. Return: total active vehicles, total dealers, total countries covered, vehicles added this week.
+   - GET /api/marketplace/featured — Public. Return 8 random active vehicles with photos for the landing page featured section.
+   - GET /api/marketplace/makes — Public. Return distinct makes with vehicle count for each.
+   - GET /api/marketplace/recent — Public. Return 20 most recently listed vehicles.
+
+4. BUSINESS PROFILES:
+   - POST /api/businesses — Create business profile (auth required). Set verified=false (needs admin approval).
+   - GET /api/businesses — Public. List all verified businesses. Filter by: businessType, country, city, search (name), sortBy (rating, reviewCount, newest), page, limit.
+   - GET /api/businesses/:slug — Public. Get business by slug (custom URL).
+   - GET /api/businesses/:id/vehicles — Public. Get all active vehicles listed by this business.
+   - PUT /api/businesses/:id — Update business (auth, must be owner).
+   - GET /api/businesses/my-business — Auth required. Get current user's business profile.
+
+5. REVIEWS:
+   - POST /api/businesses/:id/reviews — Create review (auth required, cannot review own business). One review per user per business.
+   - GET /api/businesses/:id/reviews — Public. List reviews with pagination. Include reviewer name and avatar.
+   - DELETE /api/reviews/:id — Delete own review only.
+
+6. BOOKINGS:
+   - POST /api/bookings — Create booking with a business (auth required). Fields: businessId, serviceType, date, timeSlot, notes.
+   - GET /api/bookings/my-bookings — Auth required. User's bookings.
+   - GET /api/bookings/business-bookings — Auth required. Bookings for user's business.
+   - PATCH /api/bookings/:id/status — Update status (CONFIRMED, COMPLETED, CANCELLED). Business owner or booking creator only.
+
+For every endpoint:
+- Use proper error handling with consistent error response format: { success: false, error: "message" }
+- Success responses: { success: true, data: ... }
+- Include pagination metadata: { success: true, data: [...], meta: { page, limit, total, totalPages } }
+- Validate inputs — reject bad data with 400 status
+- Use Prisma includes to return related data where needed (e.g. vehicle with photos and seller)
+- Add proper indexes on searchable/filterable fields
+
+Create separate route files: vehicleRoutes.ts, businessRoutes.ts, reviewRoutes.ts, bookingRoutes.ts. Register them all in the backend entry point.
+
+Seed 10 more vehicles with photo URLs, 2 more businesses, and 5 reviews after building.
+
+Test the main endpoints with curl: vehicle search with filters, create listing, get business by slug, marketplace stats.

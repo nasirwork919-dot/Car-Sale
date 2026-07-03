@@ -212,6 +212,8 @@ model BusinessProfile {
   logo         String?
   coverImage   String?
   address      String?
+  country      String?
+  city         String?
   phone        String?
   website      String?
   verified     Boolean      @default(false)
@@ -225,6 +227,11 @@ model BusinessProfile {
   bookings   Booking[]
   spareParts SparePart[]
 
+  @@index([businessType])
+  @@index([country])
+  @@index([city])
+  @@index([verified])
+  @@index([rating])
   @@map("business_profiles")
 }
 
@@ -265,6 +272,20 @@ model Vehicle {
   messages            Message[]
   documents           Document[]
 
+  @@index([status])
+  @@index([make])
+  @@index([model])
+  @@index([year])
+  @@index([price])
+  @@index([mileage])
+  @@index([country])
+  @@index([city])
+  @@index([condition])
+  @@index([fuelType])
+  @@index([transmission])
+  @@index([bodyType])
+  @@index([sellerId])
+  @@index([createdAt])
   @@map("vehicles")
 }
 
@@ -470,6 +491,8 @@ model Review {
   reviewer User            @relation(fields: [reviewerId], references: [id])
   business BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@unique([reviewerId, businessId])
+  @@index([businessId])
   @@map("reviews")
 }
 
@@ -487,6 +510,8 @@ model Booking {
   user     User            @relation(fields: [userId], references: [id])
   business BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([businessId])
   @@map("bookings")
 }
 
