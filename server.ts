@@ -8,7 +8,7 @@ const photoSessions = new Map<string, Record<string, string>>();
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = 5000;
 
   // Set body parsers with ample limit for base64 image transmissions
   app.use(express.json({ limit: "20mb" }));
