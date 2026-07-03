@@ -1,6 +1,10 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import { createProxyMiddleware, fixRequestBody } from "http-proxy-middleware";
+
+const BACKEND_PORT = Number(process.env.BACKEND_PORT) || 3001;
+const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 
 // Global, in-memory repository for temporary cross-device photo uploads.
 // In-memory maps survive within the actively running dev/test container.
@@ -62,6 +66,24 @@ async function startServer() {
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
+
+  // --- Proxy all other /api/* traffic to the standalone backend service ---
+  // (Express + Prisma + PostgreSQL, running on localhost only, see /server)
+  // Note: Express strips the "/api" mount prefix before invoking this
+  // middleware, so we restore it via pathRewrite. We also restream the
+  // already-parsed JSON body (fixRequestBody) since express.json() above
+  // consumed the raw request stream before the proxy can forward it.
+  app.use(
+    "/api",
+    createProxyMiddleware({
+      target: BACKEND_URL,
+      changeOrigin: true,
+      pathRewrite: (path) => `/api${path}`,
+      on: {
+        proxyReq: fixRequestBody,
+      },
+    })
+  );
 
   // --- Vite Dev Middleware and Production Static Serves ---
   if (process.env.NODE_ENV !== "production") {

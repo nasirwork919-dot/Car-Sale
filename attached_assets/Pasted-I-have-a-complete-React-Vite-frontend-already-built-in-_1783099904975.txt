@@ -1,0 +1,90 @@
+I have a complete React + Vite frontend already built in this project. DO NOT touch anything in the src/ folder or any frontend files. I need you to build a production backend alongside it.
+
+STEP 1 — PROJECT SETUP + DATABASE + AUTH
+
+1. BACKEND SETUP:
+   - Create a new /server directory for all backend code
+   - Use Node.js + Express + TypeScript
+   - Use Prisma ORM with PostgreSQL (use Replit's built-in PostgreSQL database)
+   - Set up proper folder structure: /server/routes, /server/controllers, /server/middleware, /server/services, /server/utils
+   - Create /server/index.ts as the entry point
+   - The backend should run on a separate port (5000) from the frontend
+   - Add a proxy config so the frontend can call /api/* and it hits the backend
+   - DO NOT break or modify the existing frontend server.ts or vite config
+
+2. DATABASE SCHEMA (Prisma) — Create ALL these tables:
+
+   Users:
+   - id (UUID, PK), email (unique), passwordHash, firstName, lastName, phone (optional), avatar (optional), country, city, role (enum: PERSONAL, BUSINESS, INSURANCE, WORKSHOP, LOGISTICS, GOVERNMENT, POLICE), emailVerified (boolean), identityVerified (boolean), createdAt, updatedAt, deletedAt (soft delete)
+
+   BusinessProfiles:
+   - id (UUID, PK), userId (FK → Users), businessType (enum: DEALER, WORKSHOP, TIRE_SHOP, DRIVING_SCHOOL, RENTAL, DISMANTLER, LAWYER, PAINTER, GLASS_REPAIR, METALWORK, WRAPPING, DETAILING), businessName, slug (unique, for custom URL), description, logo, coverImage, address, phone, website, verified (boolean), rating, reviewCount, createdAt, updatedAt
+
+   Vehicles:
+   - id (UUID, PK), sellerId (FK → Users), vin (unique), make, model, year, mileage, fuelType, transmission, color, bodyType, engineSize, power, price, currency, country, city, status (enum: ACTIVE, SOLD, RESERVED, EXPIRED, FLAGGED), condition (enum: NEW, USED, DAMAGED, EXPORT), description, createdAt, updatedAt, deletedAt
+
+   VehiclePhotos:
+   - id (UUID, PK), vehicleId (FK → Vehicles), url, isPrimary (boolean), order (int), createdAt
+
+   Auctions:
+   - id (UUID, PK), vehicleId (FK → Vehicles), sellerId (FK → Users), startingPrice, reservePrice, currentBid, duration (enum: H24, H48, D7), startTime, endTime, status (enum: ACTIVE, ENDED, CANCELLED), depositRequired, createdAt
+
+   Bids:
+   - id (UUID, PK), auctionId (FK → Auctions), bidderId (FK → Users), amount, createdAt
+
+   TransportRequests:
+   - id (UUID, PK), requesterId (FK → Users), vehicleId (FK → Vehicles), originCountry, originCity, destCountry, destCity, transportType (enum: OPEN, ENCLOSED), status (enum: OPEN, ACCEPTED, IN_TRANSIT, DELIVERED, CANCELLED), createdAt
+
+   TransportOffers:
+   - id (UUID, PK), requestId (FK → TransportRequests), carrierId (FK → Users), price, estimatedDays, message, status (enum: PENDING, ACCEPTED, REJECTED), createdAt
+
+   Inspections:
+   - id (UUID, PK), vehicleId (FK → Vehicles), inspectorId (FK → Users), centerId, result (enum: PASSED, FAILED, REINSPECTION), mileageRecorded, notes, fraudFlags (JSON), certificateUrl, createdAt
+
+   InsurancePolicies:
+   - id (UUID, PK), userId (FK → Users), vehicleId (FK → Vehicles, optional), insurerId, policyNumber, coverageType, deductible, premium, startDate, endDate, status (enum: ACTIVE, EXPIRED, CANCELLED), documentUrl, createdAt
+
+   Claims:
+   - id (UUID, PK), policyId (FK → InsurancePolicies), userId (FK → Users), vehicleId (FK → Vehicles), incidentDate, incidentType, description, status (enum: OPEN, REVIEWING, APPROVED, DENIED, CLOSED), evidenceUrls (JSON), createdAt, updatedAt
+
+   OwnershipTransfers:
+   - id (UUID, PK), vehicleId (FK → Vehicles), fromUserId (FK → Users), toUserId (FK → Users), transferDate, documentUrl, status (enum: PENDING, CONFIRMED, CANCELLED), createdAt
+
+   StolenReports:
+   - id (UUID, PK), vehicleId (FK → Vehicles), reporterId (FK → Users), incidentDate, policeRef, description, status (enum: OPEN, INVESTIGATING, RECOVERED, CLOSED), createdAt
+
+   Messages:
+   - id (UUID, PK), senderId (FK → Users), receiverId (FK → Users), vehicleId (FK → Vehicles, optional), content, read (boolean), createdAt
+
+   Reviews:
+   - id (UUID, PK), reviewerId (FK → Users), businessId (FK → BusinessProfiles), rating (1-5), comment, createdAt
+
+   Bookings:
+   - id (UUID, PK), userId (FK → Users), businessId (FK → BusinessProfiles), serviceType, date, timeSlot, status (enum: PENDING, CONFIRMED, COMPLETED, CANCELLED), notes, createdAt
+
+   Notifications:
+   - id (UUID, PK), userId (FK → Users), type, title, message, read (boolean), link, createdAt
+
+   SpareParts:
+   - id (UUID, PK), businessId (FK → BusinessProfiles), name, oem, compatibleVins (JSON), condition (enum: NEW, USED, REFURBISHED), price, stock, createdAt
+
+   Documents:
+   - id (UUID, PK), userId (FK → Users), vehicleId (FK → Vehicles, optional), type (enum: ID_CARD, PASSPORT, REGISTRATION, INSURANCE, INSPECTION, CONTRACT, INVOICE, RECEIPT), url, name, createdAt
+
+3. AUTH SYSTEM — Build complete:
+   - POST /api/auth/register — email, password, firstName, lastName, phone (optional). Hash password with bcrypt. Send email verification token. Return JWT.
+   - POST /api/auth/login — email + password. Validate. Return JWT with user role.
+   - POST /api/auth/verify-email — token verification endpoint.
+   - POST /api/auth/forgot-password — send reset link.
+   - POST /api/auth/reset-password — new password with token.
+   - GET /api/auth/me — return current user from JWT.
+   - PUT /api/auth/complete-profile — add country, city, avatar, intent selection. This is called after first login.
+   - PUT /api/auth/select-role — upgrade user role (PERSONAL → BUSINESS, etc). Business requires admin approval.
+   - JWT middleware that protects all /api/* routes except auth routes.
+   - Role-based middleware: requireRole('GOVERNMENT', 'POLICE') etc.
+
+4. Run prisma migrate to create all tables.
+5. Seed the database with sample data: 5 users (one per role), 20 vehicles, 3 businesses, 5 auctions.
+6. Test that /api/auth/register and /api/auth/login work.
+
+DO NOT touch the frontend. Only build in /server directory. Make sure both frontend and backend can run together.

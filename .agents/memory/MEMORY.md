@@ -1,0 +1,1 @@
+- [Express proxy to internal backend](express-proxy-backend.md) — mounting http-proxy-middleware under a path prefix strips that prefix and breaks POST bodies unless handled explicitly.

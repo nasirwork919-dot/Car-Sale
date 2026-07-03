@@ -1,0 +1,537 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PERSONAL
+  BUSINESS
+  INSURANCE
+  WORKSHOP
+  LOGISTICS
+  GOVERNMENT
+  POLICE
+}
+
+enum BusinessType {
+  DEALER
+  WORKSHOP
+  TIRE_SHOP
+  DRIVING_SCHOOL
+  RENTAL
+  DISMANTLER
+  LAWYER
+  PAINTER
+  GLASS_REPAIR
+  METALWORK
+  WRAPPING
+  DETAILING
+}
+
+enum VehicleStatus {
+  ACTIVE
+  SOLD
+  RESERVED
+  EXPIRED
+  FLAGGED
+}
+
+enum VehicleCondition {
+  NEW
+  USED
+  DAMAGED
+  EXPORT
+}
+
+enum AuctionDuration {
+  H24
+  H48
+  D7
+}
+
+enum AuctionStatus {
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum TransportType {
+  OPEN
+  ENCLOSED
+}
+
+enum TransportRequestStatus {
+  OPEN
+  ACCEPTED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum TransportOfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum InspectionResult {
+  PASSED
+  FAILED
+  REINSPECTION
+}
+
+enum PolicyStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ClaimStatus {
+  OPEN
+  REVIEWING
+  APPROVED
+  DENIED
+  CLOSED
+}
+
+enum TransferStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum StolenReportStatus {
+  OPEN
+  INVESTIGATING
+  RECOVERED
+  CLOSED
+}
+
+enum PartCondition {
+  NEW
+  USED
+  REFURBISHED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum DocumentType {
+  ID_CARD
+  PASSPORT
+  REGISTRATION
+  INSURANCE
+  INSPECTION
+  CONTRACT
+  INVOICE
+  RECEIPT
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  phone             String?
+  avatar            String?
+  country           String?
+  city              String?
+  role              UserRole  @default(PERSONAL)
+  emailVerified     Boolean   @default(false)
+  identityVerified  Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  businessProfiles       BusinessProfile[]
+  vehicles                Vehicle[]              @relation("SellerVehicles")
+  auctions                Auction[]              @relation("SellerAuctions")
+  bids                    Bid[]
+  transportRequests       TransportRequest[]     @relation("RequesterTransport")
+  transportOffers         TransportOffer[]       @relation("CarrierOffers")
+  inspectionsPerformed    Inspection[]           @relation("InspectorInspections")
+  insurancePolicies       InsurancePolicy[]
+  claims                  Claim[]
+  transfersFrom           OwnershipTransfer[]    @relation("TransferFrom")
+  transfersTo             OwnershipTransfer[]    @relation("TransferTo")
+  stolenReports           StolenReport[]
+  sentMessages            Message[]              @relation("SenderMessages")
+  receivedMessages        Message[]              @relation("ReceiverMessages")
+  reviews                 Review[]
+  bookings                Booking[]
+  notifications           Notification[]
+  documents               Document[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+
+  @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model BusinessProfile {
+  id           String       @id @default(uuid())
+  userId       String
+  businessType BusinessType
+  businessName String
+  slug         String       @unique
+  description  String?
+  logo         String?
+  coverImage   String?
+  address      String?
+  phone        String?
+  website      String?
+  verified     Boolean      @default(false)
+  rating       Float        @default(0)
+  reviewCount  Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviews    Review[]
+  bookings   Booking[]
+  spareParts SparePart[]
+
+  @@map("business_profiles")
+}
+
+model Vehicle {
+  id          String           @id @default(uuid())
+  sellerId    String
+  vin         String           @unique
+  make        String
+  model       String
+  year        Int
+  mileage     Int
+  fuelType    String
+  transmission String
+  color       String?
+  bodyType    String?
+  engineSize  String?
+  power       String?
+  price       Float
+  currency    String           @default("USD")
+  country     String
+  city        String
+  status      VehicleStatus    @default(ACTIVE)
+  condition   VehicleCondition @default(USED)
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+
+  seller             User                @relation("SellerVehicles", fields: [sellerId], references: [id])
+  photos              VehiclePhoto[]
+  auctions            Auction[]
+  transportRequests   TransportRequest[]
+  inspections         Inspection[]
+  insurancePolicies   InsurancePolicy[]
+  claims              Claim[]
+  ownershipTransfers  OwnershipTransfer[]
+  stolenReports       StolenReport[]
+  messages            Message[]
+  documents           Document[]
+
+  @@map("vehicles")
+}
+
+model VehiclePhoto {
+  id        String   @id @default(uuid())
+  vehicleId String
+  url       String
+  isPrimary Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_photos")
+}
+
+model Auction {
+  id             String          @id @default(uuid())
+  vehicleId      String
+  sellerId       String
+  startingPrice  Float
+  reservePrice   Float?
+  currentBid     Float           @default(0)
+  duration       AuctionDuration
+  startTime      DateTime
+  endTime        DateTime
+  status         AuctionStatus   @default(ACTIVE)
+  depositRequired Float          @default(0)
+  createdAt      DateTime        @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+  seller  User    @relation("SellerAuctions", fields: [sellerId], references: [id])
+  bids    Bid[]
+
+  @@map("auctions")
+}
+
+model Bid {
+  id        String   @id @default(uuid())
+  auctionId String
+  bidderId  String
+  amount    Float
+  createdAt DateTime @default(now())
+
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  bidder  User    @relation(fields: [bidderId], references: [id])
+
+  @@map("bids")
+}
+
+model TransportRequest {
+  id             String                  @id @default(uuid())
+  requesterId    String
+  vehicleId      String
+  originCountry  String
+  originCity     String
+  destCountry    String
+  destCity       String
+  transportType  TransportType
+  status         TransportRequestStatus  @default(OPEN)
+  createdAt      DateTime                @default(now())
+
+  requester User             @relation("RequesterTransport", fields: [requesterId], references: [id])
+  vehicle   Vehicle          @relation(fields: [vehicleId], references: [id])
+  offers    TransportOffer[]
+
+  @@map("transport_requests")
+}
+
+model TransportOffer {
+  id            String                @id @default(uuid())
+  requestId     String
+  carrierId     String
+  price         Float
+  estimatedDays Int
+  message       String?
+  status        TransportOfferStatus  @default(PENDING)
+  createdAt     DateTime              @default(now())
+
+  request TransportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  carrier User             @relation("CarrierOffers", fields: [carrierId], references: [id])
+
+  @@map("transport_offers")
+}
+
+model Inspection {
+  id              String            @id @default(uuid())
+  vehicleId       String
+  inspectorId     String
+  centerId        String?
+  result          InspectionResult
+  mileageRecorded Int?
+  notes           String?
+  fraudFlags      Json?
+  certificateUrl  String?
+  createdAt       DateTime          @default(now())
+
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  inspector User    @relation("InspectorInspections", fields: [inspectorId], references: [id])
+
+  @@map("inspections")
+}
+
+model InsurancePolicy {
+  id            String       @id @default(uuid())
+  userId        String
+  vehicleId     String?
+  insurerId     String?
+  policyNumber  String       @unique
+  coverageType  String
+  deductible    Float
+  premium       Float
+  startDate     DateTime
+  endDate       DateTime
+  status        PolicyStatus @default(ACTIVE)
+  documentUrl   String?
+  createdAt     DateTime     @default(now())
+
+  user    User      @relation(fields: [userId], references: [id])
+  vehicle Vehicle?  @relation(fields: [vehicleId], references: [id])
+  claims  Claim[]
+
+  @@map("insurance_policies")
+}
+
+model Claim {
+  id            String      @id @default(uuid())
+  policyId      String
+  userId        String
+  vehicleId     String
+  incidentDate  DateTime
+  incidentType  String
+  description   String?
+  status        ClaimStatus @default(OPEN)
+  evidenceUrls  Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  policy  InsurancePolicy @relation(fields: [policyId], references: [id])
+  user    User            @relation(fields: [userId], references: [id])
+  vehicle Vehicle         @relation(fields: [vehicleId], references: [id])
+
+  @@map("claims")
+}
+
+model OwnershipTransfer {
+  id           String         @id @default(uuid())
+  vehicleId    String
+  fromUserId   String
+  toUserId     String
+  transferDate DateTime
+  documentUrl  String?
+  status       TransferStatus @default(PENDING)
+  createdAt    DateTime       @default(now())
+
+  vehicle  Vehicle @relation(fields: [vehicleId], references: [id])
+  fromUser User    @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUser   User    @relation("TransferTo", fields: [toUserId], references: [id])
+
+  @@map("ownership_transfers")
+}
+
+model StolenReport {
+  id           String             @id @default(uuid())
+  vehicleId    String
+  reporterId   String
+  incidentDate DateTime
+  policeRef    String?
+  description  String?
+  status       StolenReportStatus @default(OPEN)
+  createdAt    DateTime           @default(now())
+
+  vehicle  Vehicle @relation(fields: [vehicleId], references: [id])
+  reporter User    @relation(fields: [reporterId], references: [id])
+
+  @@map("stolen_reports")
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  vehicleId  String?
+  content    String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User     @relation("SenderMessages", fields: [senderId], references: [id])
+  receiver User     @relation("ReceiverMessages", fields: [receiverId], references: [id])
+  vehicle  Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  @@map("messages")
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  reviewerId String
+  businessId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  reviewer User            @relation(fields: [reviewerId], references: [id])
+  business BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  userId      String
+  businessId  String
+  serviceType String
+  date        DateTime
+  timeSlot    String?
+  status      BookingStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  user     User            @relation(fields: [userId], references: [id])
+  business BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("bookings")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model SparePart {
+  id              String        @id @default(uuid())
+  businessId      String
+  name            String
+  oem             String?
+  compatibleVins  Json?
+  condition       PartCondition @default(USED)
+  price           Float
+  stock           Int           @default(0)
+  createdAt       DateTime      @default(now())
+
+  business BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("spare_parts")
+}
+
+model Document {
+  id        String       @id @default(uuid())
+  userId    String
+  vehicleId String?
+  type      DocumentType
+  url       String
+  name      String
+  createdAt DateTime     @default(now())
+
+  user    User     @relation(fields: [userId], references: [id])
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  @@map("documents")
+}
