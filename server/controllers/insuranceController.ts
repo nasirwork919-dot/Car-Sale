@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, okPaginated, fail, parsePagination } from "../utils/response";
 import { isNonEmptyString } from "../utils/validation";
 import { ClaimStatus, PolicyStatus, Prisma } from "@prisma/client";
+import { createNotification } from "../services/notificationService";
 
 const POLICY_STATUSES = ["ACTIVE", "EXPIRED", "CANCELLED"] as const;
 const CLAIM_STATUSES = ["OPEN", "REVIEWING", "APPROVED", "DENIED", "CLOSED"] as const;
@@ -301,5 +302,14 @@ export async function updateClaimStatus(req: AuthenticatedRequest, res: Response
   }
 
   const updated = await prisma.claim.update({ where: { id }, data: { status: status as ClaimStatus } });
+
+  await createNotification(
+    claim.userId,
+    "CLAIM_STATUS_UPDATED",
+    "Claim status updated",
+    `Your insurance claim status changed to ${status}`,
+    `/claims/${id}`,
+  );
+
   ok(res, updated);
 }

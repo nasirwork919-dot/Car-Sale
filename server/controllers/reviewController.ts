@@ -3,6 +3,7 @@ import { Request } from "express";
 import { prisma } from "../utils/prisma";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, okPaginated, fail, parsePagination } from "../utils/response";
+import { createNotification } from "../services/notificationService";
 
 export async function createReview(req: AuthenticatedRequest, res: Response) {
   const userId = req.user!.userId;
@@ -59,6 +60,14 @@ export async function createReview(req: AuthenticatedRequest, res: Response) {
 
     return created;
   });
+
+  await createNotification(
+    business.userId,
+    "NEW_REVIEW",
+    "New review received",
+    `Your business received a new ${Math.round(ratingNum)}-star review`,
+    `/businesses/${business.slug}`,
+  );
 
   ok(res, review, 201);
 }

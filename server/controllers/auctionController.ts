@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, okPaginated, fail, parsePagination } from "../utils/response";
 import { isNonEmptyString } from "../utils/validation";
 import { AuctionDuration, Prisma } from "@prisma/client";
+import { createNotification } from "../services/notificationService";
 
 const DURATIONS = ["H24", "H48", "D7"] as const;
 const DURATION_MS: Record<(typeof DURATIONS)[number], number> = {
@@ -80,9 +81,60 @@ export async function createAuction(req: AuthenticatedRequest, res: Response) {
   ok(res, auction, 201);
 }
 
+async function closeAuctionIfExpired(auctionId: string) {
+  const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
+  if (!auction || auction.status !== "ACTIVE" || auction.endTime.getTime() > Date.now()) {
+    return;
+  }
+
+  const topBid = await prisma.bid.findFirst({ where: { auctionId }, orderBy: { amount: "desc" } });
+
+  await prisma.auction.update({ where: { id: auctionId }, data: { status: "ENDED" } });
+
+  await createNotification(
+    auction.sellerId,
+    "AUCTION_ENDED",
+    "Your auction has ended",
+    topBid ? `Your auction ended with a winning bid of ${topBid.amount}` : "Your auction ended with no bids",
+    `/auctions/${auctionId}`,
+  );
+
+  if (topBid) {
+    await createNotification(
+      topBid.bidderId,
+      "AUCTION_ENDED",
+      "Auction you bid on has ended",
+      `The auction you bid on has ended. Your bid of ${topBid.amount} won!`,
+      `/auctions/${auctionId}`,
+    );
+  }
+
+  const otherBidders = await prisma.bid.findMany({
+    where: { auctionId, ...(topBid ? { bidderId: { not: topBid.bidderId } } : {}) },
+    distinct: ["bidderId"],
+  });
+  for (const bid of otherBidders) {
+    await createNotification(
+      bid.bidderId,
+      "AUCTION_ENDED",
+      "Auction you bid on has ended",
+      "The auction you bid on has ended. Unfortunately your bid did not win.",
+      `/auctions/${auctionId}`,
+    );
+  }
+}
+
 export async function listAuctions(req: Request, res: Response) {
   const q = req.query as Record<string, unknown>;
   const { page, limit, skip } = parsePagination(q);
+
+  const expiring = await prisma.auction.findMany({
+    where: { status: "ACTIVE", endTime: { lte: new Date() } },
+    select: { id: true },
+  });
+  for (const { id } of expiring) {
+    await closeAuctionIfExpired(id);
+  }
 
   const where: Prisma.AuctionWhereInput = { status: "ACTIVE" };
 
@@ -112,6 +164,7 @@ export async function listAuctions(req: Request, res: Response) {
 
 export async function getAuction(req: Request, res: Response) {
   const { id } = req.params;
+  await closeAuctionIfExpired(id);
   const auction = await prisma.auction.findUnique({
     where: { id },
     include: {
@@ -169,6 +222,14 @@ export async function placeBid(req: AuthenticatedRequest, res: Response) {
     prisma.bid.create({ data: { auctionId: id, bidderId: userId, amount: bidAmount } }),
     prisma.auction.update({ where: { id }, data: { currentBid: bidAmount }, include: auctionInclude }),
   ]);
+
+  await createNotification(
+    auction.sellerId,
+    "NEW_BID",
+    "New bid on your auction",
+    `A new bid of ${bidAmount} was placed on your auction`,
+    `/auctions/${id}`,
+  );
 
   ok(res, updatedAuction, 201);
 }

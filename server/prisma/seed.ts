@@ -370,6 +370,139 @@ async function main() {
     console.log("Stolen report already seeded");
   }
 
+  const dismantlerBusiness = await prisma.businessProfile.upsert({
+    where: { slug: "citywide-auto-dismantlers" },
+    update: {},
+    create: {
+      userId: businessSeller2.id,
+      businessType: "DISMANTLER",
+      businessName: "Citywide Auto Dismantlers",
+      slug: "citywide-auto-dismantlers",
+      country: "USA",
+      city: "New York",
+      verified: true,
+      rating: 4.2,
+      reviewCount: 8,
+    },
+  });
+  console.log("Seeded 1 dismantler business");
+
+  const sparePartDefs = [
+    {
+      name: "Front Bumper Assembly",
+      oem: "OEM-BMP-2201",
+      condition: "USED" as const,
+      price: 220,
+      stock: 3,
+      compatibleVins: [vehicles[0].vin, vehicles[10]?.vin].filter(Boolean),
+    },
+    {
+      name: "Alternator",
+      oem: "OEM-ALT-3390",
+      condition: "REFURBISHED" as const,
+      price: 145,
+      stock: 5,
+      compatibleVins: [vehicles[1].vin],
+    },
+    {
+      name: "Headlight Assembly (Left)",
+      oem: "OEM-HLA-4471",
+      condition: "NEW" as const,
+      price: 95,
+      stock: 10,
+      compatibleVins: [vehicles[2].vin, vehicles[3].vin],
+    },
+    {
+      name: "Side Mirror (Right)",
+      oem: "OEM-MIR-5502",
+      condition: "USED" as const,
+      price: 40,
+      stock: 7,
+      compatibleVins: [vehicles[4].vin],
+    },
+    {
+      name: "Radiator",
+      oem: "OEM-RAD-6613",
+      condition: "REFURBISHED" as const,
+      price: 130,
+      stock: 4,
+      compatibleVins: [vehicles[5].vin, vehicles[6].vin],
+    },
+  ];
+
+  const spareParts = [];
+  for (const def of sparePartDefs) {
+    const existing = await prisma.sparePart.findFirst({ where: { businessId: dismantlerBusiness.id, oem: def.oem } });
+    if (existing) {
+      spareParts.push(existing);
+      continue;
+    }
+    const part = await prisma.sparePart.create({
+      data: {
+        businessId: dismantlerBusiness.id,
+        name: def.name,
+        oem: def.oem,
+        compatibleVins: def.compatibleVins,
+        condition: def.condition,
+        price: def.price,
+        stock: def.stock,
+      },
+    });
+    spareParts.push(part);
+  }
+  console.log(`Seeded ${spareParts.length} spare parts`);
+
+  const messageDefs = [
+    { from: seller, to: businessSeller, content: "Hi, is this vehicle still available?" },
+    { from: businessSeller, to: seller, content: "Yes, it's still available. Would you like to schedule a viewing?" },
+    { from: seller, to: businessSeller, content: "Sure, how about this weekend?" },
+    { from: businessSeller, to: seller, content: "Works for me. Saturday at 10am?" },
+    { from: seller, to: businessSeller2, content: "Do you offer detailing packages for SUVs?" },
+    { from: businessSeller2, to: seller, content: "Yes, we have a full SUV detailing package available." },
+    { from: insurer, to: seller, content: "Your insurance policy renewal is coming up soon." },
+    { from: seller, to: insurer, content: "Thanks for the heads up, I'll review it." },
+    { from: inspector, to: businessSeller, content: "We need to schedule a re-inspection for one of your vehicles." },
+    { from: businessSeller, to: inspector, content: "Sure, let me know what dates work for you." },
+  ];
+
+  let messageCount = 0;
+  for (const def of messageDefs) {
+    await prisma.message.create({
+      data: {
+        senderId: def.from.id,
+        receiverId: def.to.id,
+        content: def.content,
+        read: false,
+      },
+    });
+    messageCount += 1;
+  }
+  console.log(`Seeded ${messageCount} messages`);
+
+  const notificationDefs = [
+    { user: seller, type: "NEW_BID", title: "New bid on your auction", message: "A new bid of 12000 was placed on your auction", link: "/auctions/sample" },
+    { user: businessSeller, type: "NEW_REVIEW", title: "New review received", message: "Your business received a new 5-star review", link: "/businesses/prime-auto-dealers" },
+    { user: seller, type: "NEW_MESSAGE", title: "New message", message: "Bailey Business sent you a message", link: "/messages" },
+    { user: businessSeller, type: "NEW_TRANSPORT_OFFER", title: "New transport offer", message: "You received a new offer of 350 for your transport request", link: "/transport" },
+    { user: insurer, type: "CLAIM_STATUS_UPDATED", title: "Claim status updated", message: "A claim status changed to REVIEWING", link: "/claims" },
+  ];
+
+  let notificationCount = 0;
+  for (const def of notificationDefs) {
+    await prisma.notification.create({
+      data: {
+        userId: def.user.id,
+        type: def.type,
+        title: def.title,
+        message: def.message,
+        link: def.link,
+        read: false,
+      },
+    });
+    notificationCount += 1;
+  }
+  console.log(`Seeded ${notificationCount} notifications`);
+
   console.log("Seed complete. Sample login: personal@justcarsale.com / Password123!");
 }
 

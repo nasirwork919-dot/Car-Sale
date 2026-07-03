@@ -3,6 +3,7 @@ import { prisma } from "../utils/prisma";
 import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, fail } from "../utils/response";
 import { isNonEmptyString } from "../utils/validation";
+import { createNotification } from "../services/notificationService";
 
 const transferInclude = {
   vehicle: { select: { id: true, vin: true, make: true, model: true, year: true } },
@@ -59,6 +60,14 @@ export async function createTransfer(req: AuthenticatedRequest, res: Response) {
     },
     include: transferInclude,
   });
+
+  await createNotification(
+    toUserId,
+    "OWNERSHIP_TRANSFER_INITIATED",
+    "Ownership transfer initiated",
+    `${transfer.fromUser.firstName} ${transfer.fromUser.lastName} wants to transfer a vehicle to you`,
+    `/transfers/${transfer.id}`,
+  );
 
   ok(res, transfer, 201);
 }

@@ -13,6 +13,10 @@ import inspectionRoutes from "./routes/inspectionRoutes";
 import insuranceRoutes from "./routes/insuranceRoutes";
 import transferRoutes from "./routes/transferRoutes";
 import stolenReportRoutes from "./routes/stolenReportRoutes";
+import messageRoutes from "./routes/messageRoutes";
+import notificationRoutes from "./routes/notificationRoutes";
+import sparePartRoutes from "./routes/sparePartRoutes";
+import documentRoutes from "./routes/documentRoutes";
 
 const PORT = Number(process.env.BACKEND_PORT) || 3001;
 
@@ -39,6 +43,10 @@ app.use("/api/inspections", inspectionRoutes);
 app.use("/api/insurance", insuranceRoutes);
 app.use("/api/transfers", transferRoutes);
 app.use("/api/stolen-reports", stolenReportRoutes);
+app.use("/api/messages", messageRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/spare-parts", sparePartRoutes);
+app.use("/api/documents", documentRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ error: "Not found" });

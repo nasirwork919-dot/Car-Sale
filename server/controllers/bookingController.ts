@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, okPaginated, fail, parsePagination } from "../utils/response";
 import { isNonEmptyString } from "../utils/validation";
 import { BookingStatus } from "@prisma/client";
+import { createNotification } from "../services/notificationService";
 
 const BOOKING_STATUSES = ["PENDING", "CONFIRMED", "COMPLETED", "CANCELLED"] as const;
 
@@ -128,6 +129,15 @@ export async function updateBookingStatus(req: AuthenticatedRequest, res: Respon
     where: { id },
     data: { status: status as BookingStatus },
   });
+
+  const notifyUserId = isCreator ? booking.business.userId : booking.userId;
+  await createNotification(
+    notifyUserId,
+    "BOOKING_STATUS_UPDATED",
+    "Booking status updated",
+    `Your booking status changed to ${status}`,
+    `/bookings/${id}`,
+  );
 
   ok(res, updated);
 }

@@ -509,6 +509,10 @@ model Message {
   receiver User     @relation("ReceiverMessages", fields: [receiverId], references: [id])
   vehicle  Vehicle? @relation(fields: [vehicleId], references: [id])
 
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([vehicleId])
+  @@index([receiverId, read])
   @@map("messages")
 }
 
@@ -559,6 +563,8 @@ model Notification {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([userId, read])
   @@map("notifications")
 }
 
@@ -575,6 +581,9 @@ model SparePart {
 
   business BusinessProfile @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@index([businessId])
+  @@index([condition])
+  @@index([oem])
   @@map("spare_parts")
 }
 
@@ -590,5 +599,8 @@ model Document {
   user    User     @relation(fields: [userId], references: [id])
   vehicle Vehicle? @relation(fields: [vehicleId], references: [id])
 
+  @@index([userId])
+  @@index([vehicleId])
+  @@index([type])
   @@map("documents")
 }

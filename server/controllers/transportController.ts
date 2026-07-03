@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, okPaginated, fail, parsePagination } from "../utils/response";
 import { isNonEmptyString } from "../utils/validation";
 import { Prisma, TransportType } from "@prisma/client";
+import { createNotification } from "../services/notificationService";
 
 const TRANSPORT_TYPES = ["OPEN", "ENCLOSED"] as const;
 const REQUEST_STATUSES = ["OPEN", "ACCEPTED", "IN_TRANSIT", "DELIVERED", "CANCELLED"] as const;
@@ -144,6 +145,14 @@ export async function createOffer(req: AuthenticatedRequest, res: Response) {
     },
   });
 
+  await createNotification(
+    request.requesterId,
+    "NEW_TRANSPORT_OFFER",
+    "New transport offer",
+    `You received a new offer of ${priceNum} for your transport request`,
+    `/transport/${requestId}`,
+  );
+
   ok(res, offer, 201);
 }
 
@@ -173,6 +182,14 @@ export async function acceptOffer(req: AuthenticatedRequest, res: Response) {
     }),
     prisma.transportRequest.update({ where: { id: offer.requestId }, data: { status: "ACCEPTED" } }),
   ]);
+
+  await createNotification(
+    offer.carrierId,
+    "TRANSPORT_OFFER_ACCEPTED",
+    "Your transport offer was accepted",
+    "Your offer has been accepted by the requester",
+    `/transport/${offer.requestId}`,
+  );
 
   const updated = await prisma.transportRequest.findUnique({ where: { id: offer.requestId }, include: requestInclude });
   ok(res, updated);

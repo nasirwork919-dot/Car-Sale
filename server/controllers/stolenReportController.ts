@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from "../middleware/auth";
 import { ok, okPaginated, fail, parsePagination } from "../utils/response";
 import { isNonEmptyString } from "../utils/validation";
 import { Prisma, StolenReportStatus } from "@prisma/client";
+import { createNotification } from "../services/notificationService";
 
 const REPORT_STATUSES = ["OPEN", "INVESTIGATING", "RECOVERED", "CLOSED"] as const;
 const UPDATABLE_STATUSES = ["INVESTIGATING", "RECOVERED", "CLOSED"] as const;
@@ -65,6 +66,14 @@ export async function createReport(req: AuthenticatedRequest, res: Response) {
     }),
     prisma.vehicle.update({ where: { id: vehicleId }, data: { status: "FLAGGED" } }),
   ]);
+
+  await createNotification(
+    vehicle.sellerId,
+    "VEHICLE_FLAGGED",
+    "Vehicle flagged as stolen",
+    `A stolen report was filed for your vehicle (${vehicle.make} ${vehicle.model}) and it has been flagged`,
+    `/vehicles/${vehicleId}`,
+  );
 
   ok(res, report, 201);
 }

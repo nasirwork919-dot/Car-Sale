@@ -1,0 +1,54 @@
+Steps 1-3 are complete — auth, vehicles, marketplace, businesses, reviews, bookings, auctions, transport, VIN history, inspections, insurance, claims, transfers, stolen reports all working. Now build Step 4: Messaging, Notifications, and Spare Parts.
+
+Build ALL of these endpoints in /server. Do NOT touch anything in src/.
+
+1. MESSAGING SYSTEM:
+   - POST /api/messages — Send message (auth required). Fields: receiverId, vehicleId (optional, for vehicle-specific conversations), content. Set read=false.
+   - GET /api/messages/conversations — Auth required. List all unique conversations (grouped by the other user). Return: otherUser (id, firstName, lastName, avatar), lastMessage, unreadCount, vehicle (if linked). Sort by most recent message.
+   - GET /api/messages/conversation/:userId — Auth required. Get full message thread with a specific user. Support optional query param vehicleId to filter to a specific vehicle conversation. Mark all received messages as read when fetched. Pagination (newest first, load older).
+   - GET /api/messages/unread-count — Auth required. Return total unread message count for the user.
+   - DELETE /api/messages/:id — Delete own message only (soft delete or hard delete).
+
+2. NOTIFICATIONS:
+   - GET /api/notifications — Auth required. List user's notifications. Filter by: read (true/false), type. Pagination. Newest first.
+   - PATCH /api/notifications/:id/read — Mark single notification as read.
+   - PATCH /api/notifications/read-all — Mark all notifications as read for current user.
+   - GET /api/notifications/unread-count — Auth required. Return unread notification count.
+   - DELETE /api/notifications/:id — Delete notification (owner only).
+
+   Also create a notification service (server/services/notificationService.ts) with a helper function:
+   createNotification(userId, type, title, message, link?)
+   
+   Then integrate it into existing flows — add notification triggers to:
+   - New bid on your auction → notify auction owner
+   - Auction you bid on ended → notify all bidders
+   - New transport offer received → notify request owner
+   - Transport offer accepted → notify carrier
+   - New message received → notify receiver
+   - New review on your business → notify business owner
+   - Booking status changed → notify the other party
+   - Ownership transfer initiated → notify recipient
+   - Stolen report filed on a vehicle → notify vehicle owner
+   - Claim status updated → notify claim owner
+   - Vehicle flagged by police → notify vehicle owner
+
+3. SPARE PARTS:
+   - POST /api/spare-parts — Create part listing (auth required, must have a BUSINESS profile of type DISMANTLER). Fields: name, oem, compatibleVins (JSON array), condition (NEW, USED, REFURBISHED), price, stock.
+   - GET /api/spare-parts — Public. Search parts. Filter by: name (keyword search), oem, condition, minPrice, maxPrice, compatibleVin (check if VIN exists in compatibleVins array). Pagination. Include business info.
+   - GET /api/spare-parts/:id — Public. Single part with business details.
+   - PUT /api/spare-parts/:id — Update part (auth, must be owner's business).
+   - DELETE /api/spare-parts/:id — Delete part (auth, must be owner's business).
+   - GET /api/spare-parts/my-parts — Auth required. Parts listed by current user's business.
+   - GET /api/spare-parts/compatible/:vin — Public. Find all parts compatible with a specific VIN.
+
+4. DOCUMENTS:
+   - POST /api/documents — Upload document record (auth required). Fields: vehicleId (optional), type (ID_CARD, PASSPORT, REGISTRATION, INSURANCE, INSPECTION, CONTRACT, INVOICE, RECEIPT), url, name.
+   - GET /api/documents — Auth required. Current user's documents. Filter by: type, vehicleId.
+   - GET /api/documents/:id — Auth required. Single document (must be owner).
+   - DELETE /api/documents/:id — Delete document (owner only).
+
+Create route files: messageRoutes.ts, notificationRoutes.ts, sparePartRoutes.ts, documentRoutes.ts. Register all in the backend entry point.
+
+Seed: 10 messages between users, 5 notifications, 5 spare parts with compatible VINs.
+
+Test with curl: send message, get conversations, get unread count, create spare part, search by compatible VIN, get notifications.
