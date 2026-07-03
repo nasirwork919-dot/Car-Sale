@@ -1,0 +1,234 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Inter", sans-serif;
+  --font-mono: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
+  --color-apple-gray: #121214;
+  --color-apple-dark: #ffffff;
+  --color-apple-blue: #020204;
+  --color-apple-silver: #94a3b8;
+
+  --color-black: #000000;
+
+  --color-red-650: #8B0000;
+
+  --color-blue-50: #fef2f2;
+  --color-blue-100: #fee2e2;
+  --color-blue-200: #fecaca;
+  --color-blue-300: #fca5a5;
+  --color-blue-400: #f87171;
+  --color-blue-500: #ef4444;
+  --color-blue-600: #e50914;
+  --color-blue-700: #b91c1c;
+  --color-blue-800: #991b1b;
+  --color-blue-900: #7f1d1d;
+  --color-blue-955: #450a0a;
+}
+
+body, input, button, select, textarea, table, th, td, p, span, div, a, text, h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans) !important;
+}
+
+body {
+  background-color: #F5F5F7;
+  color: #111111;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Premium Heading and Text Colors */
+h1, h2, h3, h4, h5, h6 {
+  color: #111111;
+}
+
+/* Premium 2D Classes for clean, modern flat look */
+.shadow-3d-premium {
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+}
+
+.shadow-3d-elevated {
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.02);
+}
+
+/* White and Blood Red Modern 2D Cards */
+.card-3d-tactile {
+  background-color: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-bottom: 1px solid #e4e4e7;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px 0 rgba(0,0,0,0.05);
+  transition: all 0.15s ease-in-out;
+}
+
+.card-3d-tactile:hover {
+  transform: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+/* Subtle gray-bordered 2D card */
+.card-3d-tactile-neutral {
+  background-color: #ffffff;
+  border: 1px solid #e4e4e7;
+  border-bottom: 1px solid #e4e4e7;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.02);
+  transition: all 0.15s ease-in-out;
+}
+
+.card-3d-tactile-neutral:hover {
+  transform: none;
+  border-bottom-color: #e4e4e7;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.glass-premium {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(228, 228, 231, 0.6);
+}
+
+.bevel-inset {
+  box-shadow: inset 0 1px 1px 0 rgba(0,0,0,0.02);
+}
+
+/* Modern 2D Interactive Button Styles */
+.btn-3d-red {
+  background-color: #8B0000;
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 8px;
+  position: relative;
+  box-shadow: 0 1px 2px 0 rgba(139, 0, 0, 0.1);
+  transition: all 0.15s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.btn-3d-red:hover {
+  background-color: #4A4A4A;
+  transform: none;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btn-3d-red:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* Base button specifications */
+.btn-premium {
+  background-color: #8B0000 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  border: none !important;
+  box-shadow: 0 1px 2px 0 rgba(139, 0, 0, 0.1) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.btn-premium:hover {
+  background-color: #4A4A4A !important;
+  color: #ffffff !important;
+  transform: none !important;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+}
+
+/* Custom Scrollbar */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom styles for subtle backdrop blur */
+.apple-blur {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Custom pulse indicator for live action scanning */
+@keyframes scanning {
+  0% { transform: translateY(0); opacity: 0.8; }
+  50% { transform: translateY(180px); opacity: 0.3; }
+  100% { transform: translateY(0); opacity: 0.8; }
+}
+
+.animate-scan {
+  animation: scanning 3s infinite linear;
+}
+
+/* Creamy Underline Hover Effect */
+.creamy-underline {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.creamy-underline::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  transform: scaleX(0);
+  height: 2px;
+  bottom: -2px;
+  left: 0;
+  background-color: currentColor;
+  transform-origin: bottom left;
+  transition: transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creamy-underline:hover::after {
+  transform: scaleX(1);
+}
+
+/* Creamy Red Underline Hover Effect */
+.creamy-underline-red {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.creamy-underline-red::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  transform: scaleX(0);
+  height: 2.5px;
+  bottom: -2px;
+  left: 0;
+  background-color: #dc2626; /* red-600 */
+  transform-origin: bottom left;
+  transition: transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.creamy-underline-red:hover::after {
+  transform: scaleX(1);
+}
+
+/* Base smooth entry fade-in for loads */
+.creamy-load-active {
+  animation: creamyEntrance 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes creamyEntrance {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JustCarSale.com | Professional Automotive Integrity Marketplace</title>
+    <!-- Patch read-only fetch getter issue in sandbox environments -->
+    <script id="fetch-sandbox-patch">
+      (function() {
+        try {
+          var myFetch = window.fetch;
+
+          // Helper to redefine on an object
+          function tryDefine(obj, prop) {
+            try {
+              if (!obj) return false;
+              Object.defineProperty(obj, prop, {
+                get: function() { return myFetch; },
+                set: function(val) { myFetch = val; },
+                configurable: true,
+                enumerable: true
+              });
+              return true;
+            } catch (e) {
+              return false;
+            }
+          }
+
+          // 1. Try to redefine on window directly
+          var okWindow = tryDefine(window, 'fetch');
+
+          // 2. Try to redefine on Window.prototype (where it often resides as a configurable property)
+          var okProto = false;
+          if (typeof Window !== 'undefined' && Window.prototype) {
+            okProto = tryDefine(Window.prototype, 'fetch');
+          }
+
+          // 3. Try to redefine on globalThis if available
+          if (typeof globalThis !== 'undefined') {
+            tryDefine(globalThis, 'fetch');
+          }
+
+          console.log("Fetch sandbox patch status - window:", okWindow, "proto:", okProto);
+
+          // 4. Setup a highly compatible globalThis/self proxy fallback
+          var globalThisProxy = new Proxy(window, {
+            get: function(target, prop) {
+              if (prop === 'fetch') {
+                return myFetch;
+              }
+              if (prop === 'globalThis' || prop === 'window' || prop === 'self') {
+                return globalThisProxy;
+              }
+              var val = target[prop];
+              if (typeof val === 'function') {
+                var hasPrototype = val.prototype && (typeof val.prototype === 'object' || typeof val.prototype === 'function');
+                var isCapitalized = typeof prop === 'string' && /^[A-Z]/.test(prop);
+                if (hasPrototype || isCapitalized) {
+                  return val;
+                }
+                return val.bind(target);
+              }
+              return val;
+            },
+            set: function(target, prop, value) {
+              if (prop === 'fetch') {
+                myFetch = value;
+                return true;
+              }
+              try {
+                target[prop] = value;
+              } catch (e) {
+                console.warn("Fallback failed setting " + String(prop) + " on window:", e);
+              }
+              return true;
+            }
+          });
+
+          // Redefine globalThis safely
+          try {
+            Object.defineProperty(window, 'globalThis', {
+              value: globalThisProxy,
+              writable: true,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e) {}
+
+          // Redefine self safely
+          try {
+            Object.defineProperty(window, 'self', {
+              value: globalThisProxy,
+              writable: true,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e) {}
+        } catch (err) {
+          console.error("Critical error in fetch and globalThis sandbox patching:", err);
+        }
+      })();
+    </script>
+    <!-- Google Fonts & Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-[#f4f4f7] text-[#1c1c1e] min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

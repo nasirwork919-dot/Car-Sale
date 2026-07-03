@@ -1,0 +1,6 @@
+{
+  "name": "JustCarSale.com",
+  "description": "Professional Automotive Integrity Portal. VIN checking, vehicle marketplace, auctions, and enterprise automotive workflow dashboards.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
